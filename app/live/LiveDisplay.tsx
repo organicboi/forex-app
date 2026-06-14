@@ -44,6 +44,7 @@ interface TVData {
   status: "ok" | "not_found" | "expired";
   layout?: string;
   branch_name?: string;
+  screen_orientation?: string;
   customer?: CustomerInfo;
   currencies?: CurrencyRate[];
   ads?: AdItem[];
@@ -53,10 +54,9 @@ interface TVData {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const RATES_PER_PAGE = 7;
-const RATE_PAGE_INTERVAL_MS = 8000;
 const POLL_INTERVAL_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
+const RATE_PAGE_INTERVAL_MS = 8000;
 const ORANGE = "#ef6c21";
 const INK = "#17131a";
 const WHITE = "#ffffff";
@@ -192,43 +192,12 @@ export default function LiveDisplay({ token }: { token: string | null }) {
     return () => clearInterval(t);
   }, [token]);
 
-  // ── Rate page cycling ─────────────────────────────────────────────────────
-  const currencies = tvData?.currencies ?? [];
-  const totalRatePages = Math.max(Math.ceil(currencies.length / RATES_PER_PAGE), 1);
-
-  useEffect(() => {
-    if (currencies.length === 0) return;
-    let transitionTimer: ReturnType<typeof setTimeout> | undefined;
-    const pageTimer = setInterval(() => {
-      setRatesChanging(true);
-      transitionTimer = setTimeout(() => {
-        setRatePage((p) => (p + 1) % totalRatePages);
-        setRatesChanging(false);
-      }, 350);
-    }, RATE_PAGE_INTERVAL_MS);
-    return () => {
-      clearInterval(pageTimer);
-      if (transitionTimer) clearTimeout(transitionTimer);
-    };
-  }, [totalRatePages, currencies.length]);
-
-  // ── Ad cycling (per-ad duration) ──────────────────────────────────────────
-  const ads = tvData?.ads ?? [];
-  useEffect(() => {
-    if (ads.length === 0) return;
-    const duration = (ads[adIndex]?.duration_seconds ?? 10) * 1000;
-    const t = setTimeout(() => {
-      setAdIndex((i) => (i + 1) % ads.length);
-    }, duration);
-    return () => clearTimeout(t);
-  }, [adIndex, ads]);
-
   // ── Guard states ──────────────────────────────────────────────────────────
   if (!token) {
     return (
       <FullScreen
         title="Screen not configured"
-        body="Add ?token=YOUR_BRANCH_TOKEN to the URL, or scan the QR code from your admin panel."
+        body="Add ?token=YOUR_SCREEN_TOKEN to the URL, or scan the QR code from your admin panel."
       />
     );
   }
@@ -253,11 +222,16 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   }
 
   // ── Display values ────────────────────────────────────────────────────────
+  const isPortrait = (tvData.screen_orientation ?? "landscape") === "portrait";
+  const RATES_PER_PAGE = isPortrait ? 8 : 7;
+
   const customer = tvData.customer!;
   const ticker = tvData.ticker ?? [];
   const PURPLE = customer.primary_color || "#4c195a";
   const displayName = customer.business_name || customer.name;
   const branchName = tvData.branch_name ?? "";
+  const currencies = tvData.currencies ?? [];
+  const ads = tvData.ads ?? [];
 
   // Resolve visible columns from template or fall back to hardcoded defaults
   const visibleColumns: ColumnDef[] = tvData.template_columns
@@ -269,21 +243,59 @@ export default function LiveDisplay({ token }: { token: string | null }) {
       ];
 
   const colsGrid = `1.3fr repeat(${visibleColumns.length}, 1fr)`;
-
-  const visibleRates = currencies.slice(
-    ratePage * RATES_PER_PAGE,
-    (ratePage + 1) * RATES_PER_PAGE,
-  );
+  const totalRatePages = Math.max(Math.ceil(currencies.length / RATES_PER_PAGE), 1);
+  const visibleRates = currencies.slice(ratePage * RATES_PER_PAGE, (ratePage + 1) * RATES_PER_PAGE);
   const rateSlots: Array<CurrencyRate | null> = [
     ...visibleRates,
     ...Array<null>(RATES_PER_PAGE - visibleRates.length).fill(null),
   ];
-
   const tickerItems = ticker.length > 0 ? ticker : ["Exchange rates shown are for reference only"];
+
+  // ── Rate page cycling ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (currencies.length === 0) return;
+    let transitionTimer: ReturnType<typeof setTimeout> | undefined;
+    const pageTimer = setInterval(() => {
+      setRatesChanging(true);
+      transitionTimer = setTimeout(() => {
+        setRatePage((p) => (p + 1) % totalRatePages);
+        setRatesChanging(false);
+      }, 350);
+    }, RATE_PAGE_INTERVAL_MS);
+    return () => {
+      clearInterval(pageTimer);
+      if (transitionTimer) clearTimeout(transitionTimer);
+    };
+  }, [totalRatePages, currencies.length]);
+
+  // ── Ad cycling (per-ad duration) ──────────────────────────────────────────
+  useEffect(() => {
+    if (ads.length === 0) return;
+    const duration = (ads[adIndex]?.duration_seconds ?? 10) * 1000;
+    const t = setTimeout(() => {
+      setAdIndex((i) => (i + 1) % ads.length);
+    }, duration);
+    return () => clearTimeout(t);
+  }, [adIndex, ads]);
+
+  // ── Portrait-aware styles ──────────────────────────────────────────────────
+  const mainStyle: React.CSSProperties = isPortrait
+    ? { minHeight: 0, display: "grid", gridTemplateColumns: "1fr", gridTemplateRows: "1fr 40%" }
+    : { minHeight: 0, display: "grid", gridTemplateColumns: "64% 36%" };
+
+  const ratesCellFontSize = isPortrait ? "clamp(22px, 3.5vh, 76px)" : "clamp(28px, 3.2vw, 88px)";
+  const headerCellFontSize = isPortrait ? "clamp(16px, 1.9vh, 38px)" : "clamp(18px, 1.9vw, 42px)";
+  const currencyCodeFontSize = isPortrait ? "clamp(18px, 2.6vh, 50px)" : "clamp(20px, 2.2vw, 54px)";
+  const currencyNameFontSize = isPortrait ? "clamp(10px, 1.3vh, 20px)" : "clamp(12px, 1.1vw, 22px)";
+  const flagWidth = isPortrait ? "clamp(30px, 2.5vh, 52px)" : "clamp(36px, 2.8vw, 58px)";
+
+  const promotionPanelStyle: React.CSSProperties = isPortrait
+    ? { ...promotionPanel, borderLeft: "none", borderTop: "3px solid #c0b8b0" }
+    : promotionPanel;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={screen}>
+    <div style={screenStyle}>
       {/* ── Header ── */}
       <header style={{ ...header, borderBottomColor: ORANGE }}>
         {/* Brand */}
@@ -323,15 +335,15 @@ export default function LiveDisplay({ token }: { token: string | null }) {
       </header>
 
       {/* ── Main ── */}
-      <main style={main}>
+      <main style={mainStyle}>
         {/* Rates */}
         <section style={ratesSection}>
           <div style={table}>
-            {/* Column headers — dynamic */}
+            {/* Column headers */}
             <div style={{ ...tableHeader, borderBottomColor: PURPLE, gridTemplateColumns: colsGrid }}>
-              <div style={{ ...headerCell, ...currencyColumn }}>CURRENCY</div>
+              <div style={{ ...headerCell, ...currencyColumn, fontSize: headerCellFontSize }}>CURRENCY</div>
               {visibleColumns.map((col) => (
-                <div key={col.key} style={{ ...headerCell, color: col.color }}>
+                <div key={col.key} style={{ ...headerCell, color: col.color, fontSize: headerCellFontSize }}>
                   {col.label.toUpperCase()}
                 </div>
               ))}
@@ -342,10 +354,11 @@ export default function LiveDisplay({ token }: { token: string | null }) {
               <div key={ratePage} style={{ ...rateProgress, backgroundColor: ORANGE }} />
             </div>
 
-            {/* Rows — dynamic */}
+            {/* Rows */}
             <div
               style={{
                 ...tableBody,
+                gridTemplateRows: `repeat(${RATES_PER_PAGE}, minmax(0, 1fr))`,
                 opacity: ratesChanging ? 0 : 1,
                 transform: ratesChanging ? "translateY(1vh)" : "translateY(0)",
               }}
@@ -367,16 +380,16 @@ export default function LiveDisplay({ token }: { token: string | null }) {
                         alt=""
                         width={54}
                         height={36}
-                        style={flagStyle}
+                        style={{ ...flagStyle, width: flagWidth }}
                         unoptimized
                       />
                       <div>
-                        <div style={currencyCode}>{rate.code}</div>
-                        <div style={currencyName}>{rate.name}</div>
+                        <div style={{ ...currencyCode, fontSize: currencyCodeFontSize }}>{rate.code}</div>
+                        <div style={{ ...currencyName, fontSize: currencyNameFontSize }}>{rate.name}</div>
                       </div>
                     </div>
 
-                    {/* Rate cells — dynamic */}
+                    {/* Rate cells */}
                     {visibleColumns.map((col) => {
                       const value = col.is_builtin
                         ? (rate as unknown as Record<string, number>)[col.key] ?? 0
@@ -384,7 +397,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
                       return (
                         <div
                           key={col.key}
-                          style={{ ...rateCell, color: col.color, fontWeight: 800, textAlign: "right" }}
+                          style={{ ...rateCell, color: col.color, fontWeight: 800, textAlign: "right", fontSize: ratesCellFontSize }}
                         >
                           {formatRate(value, rate.decimal_places)}
                         </div>
@@ -398,7 +411,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
         </section>
 
         {/* Ads panel */}
-        <aside style={{ ...promotionPanel, backgroundColor: "#211725" }}>
+        <aside style={{ ...promotionPanelStyle, backgroundColor: "#211725" }}>
           {ads.length === 0 ? (
             <div
               style={{
@@ -479,7 +492,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const screen: React.CSSProperties = {
+const screenStyle: React.CSSProperties = {
   width: "100vw",
   height: "100vh",
   overflow: "hidden",
@@ -589,12 +602,6 @@ const clockDate: React.CSSProperties = {
   fontWeight: 600,
   textTransform: "uppercase",
   letterSpacing: "0.08em",
-};
-
-const main: React.CSSProperties = {
-  minHeight: 0,
-  display: "grid",
-  gridTemplateColumns: "64% 36%",
 };
 
 const ratesSection: React.CSSProperties = {

@@ -26,20 +26,34 @@ interface Props {
   storageMb: { used: number; limit: number }
 }
 
+type TypeFilter = 'all' | 'image' | 'video'
+
 const ALLOWED_MIME = 'image/jpeg,image/jpg,image/png,image/webp,image/gif,video/mp4,video/webm'
 
 export default function AdManager({ initialAds, branches, storageMb }: Props) {
   const [ads, setAds] = useState<Ad[]>(initialAds)
-  const [selectedBranch, setSelectedBranch] = useState<string>('') // '' = customer-wide
+  const [selectedBranch, setSelectedBranch] = useState<string>('')
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState('')
   const [uploadError, setUploadError] = useState('')
   const [duration, setDuration] = useState(10)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const displayedAds = ads.filter((a) =>
+  // Inline duration edit
+  const [editingDurationId, setEditingDurationId] = useState<string | null>(null)
+  const [editingDurationValue, setEditingDurationValue] = useState(10)
+
+  // Preview overlay
+  const [previewAd, setPreviewAd] = useState<Ad | null>(null)
+
+  const scopeFiltered = ads.filter((a) =>
     selectedBranch ? a.branch_id === selectedBranch : a.branch_id === null
   )
+
+  const displayedAds = typeFilter === 'all'
+    ? scopeFiltered
+    : scopeFiltered.filter((a) => a.file_type === typeFilter)
 
   async function handleUpload(file: File) {
     setUploading(true)
@@ -47,7 +61,6 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
     setUploadProgress('Preparing upload…')
 
     try {
-      // Step 1: Get presigned URL
       const urlRes = await fetch('/api/ads/upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,7 +76,6 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
         return
       }
 
-      // Step 2: Upload to R2
       setUploadProgress('Uploading file…')
       const uploadRes = await fetch(urlData.upload_url, {
         method: 'PUT',
@@ -75,7 +87,6 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
         return
       }
 
-      // Step 3: Save metadata
       setUploadProgress('Saving…')
       const fileType = file.type.startsWith('video/') ? 'video' : 'image'
       const metaRes = await fetch('/api/ads', {
@@ -128,6 +139,21 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
     }
   }
 
+  async function commitDurationEdit(id: string) {
+    const value = Math.max(1, Math.min(300, editingDurationValue))
+    setEditingDurationId(null)
+    const res = await fetch(`/api/ads/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ duration_seconds: value }),
+    })
+    if (res.ok) {
+      setAds((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, duration_seconds: value } : a))
+      )
+    }
+  }
+
   function formatBytes(bytes: number) {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -136,6 +162,9 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
   const storagePercent = storageMb.limit > 0
     ? Math.min(100, (storageMb.used / storageMb.limit) * 100)
     : 0
+
+  const imageCount = scopeFiltered.filter((a) => a.file_type === 'image').length
+  const videoCount = scopeFiltered.filter((a) => a.file_type === 'video').length
 
   return (
     <div>
@@ -180,7 +209,7 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
               value={duration}
               onChange={(e) => setDuration(Math.max(1, Number(e.target.value)))}
               min={1}
-              max={120}
+              max={300}
               className="w-24 bg-zinc-800 border border-zinc-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
             />
           </div>
@@ -206,10 +235,36 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
             ? ` · Uploading to: ${branches.find((b) => b.id === selectedBranch)?.name}`
             : ' · Uploading as customer-wide'}
         </p>
+        <p className="text-zinc-600 text-xs mt-1">
+          Tip: To assign specific ads to a screen, open <a href="/admin/branches" className="text-purple-400 hover:text-purple-300">Branches</a> → select a branch → click the ⚙ icon on a screen.
+        </p>
         {uploadError && (
           <p className="text-red-400 text-sm mt-2">{uploadError}</p>
         )}
       </div>
+
+      {/* Type filter tabs */}
+      {scopeFiltered.length > 0 && (
+        <div className="flex items-center gap-1 mb-4">
+          {([
+            { key: 'all', label: `All (${scopeFiltered.length})` },
+            { key: 'image', label: `Images (${imageCount})` },
+            { key: 'video', label: `Videos (${videoCount})` },
+          ] as { key: TypeFilter; label: string }[]).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setTypeFilter(key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                typeFilter === key
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Ad list */}
       {displayedAds.length === 0 ? (
@@ -224,7 +279,7 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
               <tr className="border-b border-zinc-800">
                 <th className="text-left px-4 py-3 text-zinc-500 font-medium w-16">Preview</th>
                 <th className="text-left px-4 py-3 text-zinc-500 font-medium">File</th>
-                <th className="text-right px-4 py-3 text-zinc-500 font-medium w-24">Duration</th>
+                <th className="text-right px-4 py-3 text-zinc-500 font-medium w-28">Duration</th>
                 <th className="text-right px-4 py-3 text-zinc-500 font-medium w-20">Size</th>
                 <th className="text-center px-4 py-3 text-zinc-500 font-medium w-20">Active</th>
                 <th className="px-4 py-3 w-16"></th>
@@ -233,9 +288,14 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
             <tbody>
               {displayedAds.map((ad) => (
                 <tr key={ad.id} className="border-b border-zinc-800/50 last:border-0">
+                  {/* Thumbnail */}
                   <td className="px-4 py-3">
-                    {ad.file_type === 'image' ? (
-                      <div className="w-12 h-8 bg-zinc-800 rounded overflow-hidden">
+                    <button
+                      onClick={() => setPreviewAd(ad)}
+                      className="group relative w-12 h-8 bg-zinc-800 rounded overflow-hidden block"
+                      title="Preview"
+                    >
+                      {ad.file_type === 'image' ? (
                         <Image
                           src={ad.file_url}
                           alt={ad.original_name ?? 'Ad'}
@@ -244,21 +304,59 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
                           unoptimized
                           className="object-cover w-full h-full"
                         />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <span className="text-zinc-400 text-xs">▶</span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="text-white text-xs">👁</span>
                       </div>
-                    ) : (
-                      <div className="w-12 h-8 bg-zinc-800 rounded flex items-center justify-center">
-                        <span className="text-zinc-500 text-xs">▶</span>
-                      </div>
-                    )}
+                    </button>
                   </td>
+
+                  {/* File name */}
                   <td className="px-4 py-3">
                     <div className="text-zinc-300 text-xs truncate max-w-xs">
                       {ad.original_name ?? ad.file_url.split('/').pop()}
                     </div>
                     <div className="text-zinc-600 text-xs mt-0.5 capitalize">{ad.file_type}</div>
                   </td>
-                  <td className="px-4 py-3 text-right text-zinc-400 text-xs">{ad.duration_seconds}s</td>
+
+                  {/* Duration — inline editable */}
+                  <td className="px-4 py-3 text-right">
+                    {editingDurationId === ad.id ? (
+                      <input
+                        type="number"
+                        value={editingDurationValue}
+                        min={1}
+                        max={300}
+                        autoFocus
+                        onChange={(e) => setEditingDurationValue(Number(e.target.value))}
+                        onBlur={() => commitDurationEdit(ad.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitDurationEdit(ad.id)
+                          if (e.key === 'Escape') setEditingDurationId(null)
+                        }}
+                        className="w-16 bg-zinc-800 border border-purple-600 text-white text-xs rounded px-2 py-0.5 text-right focus:outline-none"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingDurationId(ad.id)
+                          setEditingDurationValue(ad.duration_seconds)
+                        }}
+                        className="text-zinc-400 text-xs hover:text-purple-300 transition-colors"
+                        title="Click to edit duration"
+                      >
+                        {ad.duration_seconds}s
+                      </button>
+                    )}
+                  </td>
+
                   <td className="px-4 py-3 text-right text-zinc-500 text-xs">{formatBytes(ad.file_size_bytes)}</td>
+
+                  {/* Active toggle */}
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => toggleActive(ad.id, ad.is_active)}
@@ -273,6 +371,8 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
                       />
                     </button>
                   </td>
+
+                  {/* Delete */}
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => handleDelete(ad.id, ad.original_name)}
@@ -285,6 +385,46 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Preview overlay */}
+      {previewAd && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          onClick={() => setPreviewAd(null)}
+        >
+          <div
+            className="relative max-w-3xl max-h-[80vh] rounded-xl overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {previewAd.file_type === 'video' ? (
+              <video
+                src={previewAd.file_url}
+                autoPlay
+                controls
+                className="max-w-full max-h-[75vh] object-contain"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewAd.file_url}
+                alt={previewAd.original_name ?? 'Preview'}
+                className="max-w-full max-h-[75vh] object-contain"
+              />
+            )}
+            <div className="absolute top-3 right-3">
+              <button
+                onClick={() => setPreviewAd(null)}
+                className="bg-black/60 hover:bg-black/80 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-4 py-2 text-xs text-zinc-300">
+              {previewAd.original_name ?? 'Ad'} · {previewAd.file_type} · {previewAd.duration_seconds}s · {formatBytes(previewAd.file_size_bytes)}
+            </div>
+          </div>
         </div>
       )}
     </div>

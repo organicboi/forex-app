@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
   if (!auth) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const branchId = request.nextUrl.searchParams.get('branch_id')
+  const all = request.nextUrl.searchParams.get('all')
   const supabase = createAdminClient()
 
   let query = supabase
@@ -30,10 +31,12 @@ export async function GET(request: NextRequest) {
     .order('display_order', { ascending: true })
     .order('created_at', { ascending: true })
 
-  if (branchId) {
-    query = query.eq('branch_id', branchId)
-  } else {
-    query = query.is('branch_id', null)
+  if (all !== 'true') {
+    if (branchId) {
+      query = query.eq('branch_id', branchId)
+    } else {
+      query = query.is('branch_id', null)
+    }
   }
 
   const { data, error } = await query

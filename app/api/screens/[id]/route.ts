@@ -44,6 +44,12 @@ export async function PATCH(
   }
   if ('template_id' in body) updates.template_id = body.template_id || null
   if (body.is_active !== undefined) updates.is_active = Boolean(body.is_active)
+  if (body.orientation !== undefined) {
+    if (!['landscape', 'portrait'].includes(body.orientation)) {
+      return Response.json({ error: 'Invalid orientation' }, { status: 400 })
+    }
+    updates.orientation = body.orientation
+  }
 
   if (Object.keys(updates).length === 0) return Response.json({ error: 'Nothing to update' }, { status: 400 })
 
@@ -51,7 +57,7 @@ export async function PATCH(
     .from('screens')
     .update(updates)
     .eq('id', id)
-    .select('id, name, screen_token, template_id, is_active, display_templates(id, name)')
+    .select('id, name, screen_token, template_id, orientation, is_active, display_templates(id, name)')
     .single()
 
   if (error) return Response.json({ error: error.message }, { status: 500 })

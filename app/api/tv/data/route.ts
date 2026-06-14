@@ -10,6 +10,14 @@ interface ColumnDef {
   is_builtin: boolean
 }
 
+interface AdRow {
+  id: string
+  file_url: string
+  file_type: string
+  duration_seconds: number
+  is_active: boolean
+}
+
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
   if (!token) return Response.json({ error: 'Missing token' }, { status: 400 })
@@ -19,7 +27,7 @@ export async function GET(request: NextRequest) {
   // Resolve screen by screen_token
   const { data: screen } = await supabase
     .from('screens')
-    .select('id, branch_id, customer_id, template_id, is_active')
+    .select('id, branch_id, customer_id, template_id, orientation, is_active')
     .eq('screen_token', token)
     .single()
 
@@ -67,6 +75,25 @@ export async function GET(request: NextRequest) {
     if (defaultTpl) templateColumns = defaultTpl.columns as ColumnDef[]
   }
 
+  // Resolve screen-specific ads: if screen has assignments, use those instead of RPC ads
+  let resolvedAds: unknown[] | undefined = tvData.ads as unknown[] | undefined
+
+  const { data: screenAdRows } = await supabase
+    .from('screen_ads')
+    .select('display_order, ads(id, file_url, file_type, duration_seconds, is_active)')
+    .eq('screen_id', screen.id)
+    .order('display_order', { ascending: true })
+
+  if (screenAdRows && screenAdRows.length > 0) {
+    resolvedAds = screenAdRows
+      .map((row) => {
+        const ad = row.ads as unknown as AdRow | null
+        if (!ad || !ad.is_active) return null
+        return { id: ad.id, file_url: ad.file_url, file_type: ad.file_type, duration_seconds: ad.duration_seconds }
+      })
+      .filter(Boolean)
+  }
+
   // Fetch extra_values for custom columns
   const { data: extraRows } = await supabase
     .from('rates')
@@ -91,7 +118,9 @@ export async function GET(request: NextRequest) {
   return Response.json({
     ...tvData,
     currencies: enrichedCurrencies ?? currencies,
+    ads: resolvedAds,
     branch_name: branch.name,
     template_columns: templateColumns,
+    screen_orientation: screen.orientation ?? 'landscape',
   })
 }

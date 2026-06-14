@@ -154,6 +154,7 @@ export interface Database {
         Row: {
           id: string
           branch_id: string
+          screen_id: string | null
           session_key: string
           last_seen_at: string
           user_agent: string | null
@@ -354,6 +355,75 @@ export interface Database {
           error_summary?: Json | null
         }
         Update: never
+        Relationships: []
+      }
+      display_templates: {
+        Row: {
+          id: string
+          customer_id: string
+          name: string
+          columns: Json
+          is_default: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          customer_id: string
+          name: string
+          columns: Json
+          is_default?: boolean
+        }
+        Update: Partial<{
+          name: string
+          columns: Json
+          is_default: boolean
+        }>
+        Relationships: []
+      }
+      screens: {
+        Row: {
+          id: string
+          branch_id: string
+          customer_id: string
+          name: string
+          screen_token: string
+          template_id: string | null
+          orientation: string
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          branch_id: string
+          customer_id: string
+          name?: string
+          screen_token?: string
+          template_id?: string | null
+          orientation?: string
+          is_active?: boolean
+        }
+        Update: Partial<{
+          name: string
+          template_id: string | null
+          orientation: string
+          is_active: boolean
+          screen_token: string
+        }>
+        Relationships: []
+      }
+      screen_ads: {
+        Row: {
+          screen_id: string
+          ad_id: string
+          display_order: number
+        }
+        Insert: {
+          screen_id: string
+          ad_id: string
+          display_order?: number
+        }
+        Update: Partial<{
+          display_order: number
+        }>
         Relationships: []
       }
     }
