@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useToast } from '../ToastContext'
 
 interface TickerMessage {
   id: string
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export default function TickerManager({ initialMessages }: Props) {
+  const { toast } = useToast()
   const [messages, setMessages] = useState<TickerMessage[]>(initialMessages)
   const [newText, setNewText] = useState('')
   const [adding, setAdding] = useState(false)
@@ -39,6 +41,7 @@ export default function TickerManager({ initialMessages }: Props) {
       if (!res.ok) { setError(data.error ?? 'Failed to add'); return }
       setMessages((prev) => [...prev, data])
       setNewText('')
+      toast('Message added')
     } finally {
       setAdding(false)
     }
@@ -46,7 +49,12 @@ export default function TickerManager({ initialMessages }: Props) {
 
   async function handleDelete(id: string) {
     const res = await fetch(`/api/ticker?id=${id}`, { method: 'DELETE' })
-    if (res.ok) setMessages((prev) => prev.filter((m) => m.id !== id))
+    if (res.ok) {
+      setMessages((prev) => prev.filter((m) => m.id !== id))
+      toast('Message deleted')
+    } else {
+      toast('Failed to delete message', 'error')
+    }
   }
 
   async function toggleActive(id: string, current: boolean) {
@@ -59,6 +67,8 @@ export default function TickerManager({ initialMessages }: Props) {
       setMessages((prev) =>
         prev.map((m) => (m.id === id ? { ...m, is_active: !current } : m))
       )
+    } else {
+      toast('Failed to update message', 'error')
     }
   }
 
@@ -110,6 +120,9 @@ export default function TickerManager({ initialMessages }: Props) {
         prev.map((m) => (m.id === id ? { ...m, message: editText } : m))
       )
       setEditingId(null)
+      toast('Message updated')
+    } else {
+      toast('Failed to update message', 'error')
     }
   }
 

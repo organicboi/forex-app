@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import TemplateManager from './TemplateManager'
+import type { DisplayTemplate, ColumnDef } from './TemplateEditor'
 
 export default async function TemplatesPage() {
   const user = await requireAdmin()
@@ -12,6 +13,14 @@ export default async function TemplatesPage() {
     .eq('customer_id', user.customer_id)
     .order('created_at', { ascending: true })
 
+  const mapped: DisplayTemplate[] = (templates ?? []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    is_default: t.is_default,
+    columns: ((t.columns ?? []) as unknown as ColumnDef[]),
+    created_at: t.created_at,
+  }))
+
   return (
     <div>
       <div className="mb-6">
@@ -20,7 +29,7 @@ export default async function TemplatesPage() {
           Configure which columns appear on your TV screens. The default template is shown on all branches.
         </p>
       </div>
-      <TemplateManager initialTemplates={templates ?? []} />
+      <TemplateManager initialTemplates={mapped} />
     </div>
   )
 }

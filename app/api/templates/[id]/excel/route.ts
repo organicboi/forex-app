@@ -45,7 +45,7 @@ export async function GET(
 
   if (!template) return Response.json({ error: 'Not found' }, { status: 404 })
 
-  const columns: ColumnDef[] = (template.columns as ColumnDef[])
+  const columns: ColumnDef[] = (template.columns as unknown as ColumnDef[])
     .filter((c) => c.visible)
     .sort((a, b) => a.order - b.order)
 
@@ -130,7 +130,7 @@ export async function POST(
 
   if (!template) return Response.json({ error: 'Not found' }, { status: 404 })
 
-  const columns: ColumnDef[] = (template.columns as ColumnDef[])
+  const columns: ColumnDef[] = (template.columns as unknown as ColumnDef[])
     .filter((c) => c.visible)
     .sort((a, b) => a.order - b.order)
 

@@ -202,11 +202,22 @@ export interface Database {
           buy: number | null
           sell: number | null
           transfer: number | null
+          extra_values: Json | null
           mode: 'manual' | 'live' | 'excel' | 'api'
           updated_by: string | null
           updated_at: string
         }
-        Insert: Database['public']['Tables']['rates']['Row']
+        Insert: {
+          customer_id: string
+          currency_id: string
+          buy: number | null
+          sell: number | null
+          transfer: number | null
+          extra_values?: Json | null
+          mode: 'manual' | 'live' | 'excel' | 'api'
+          updated_by: string | null
+          updated_at: string
+        }
         Update: Partial<Database['public']['Tables']['rates']['Row']>
         Relationships: []
       }
@@ -377,6 +388,7 @@ export interface Database {
           name: string
           columns: Json
           is_default: boolean
+          updated_at: string
         }>
         Relationships: []
       }
@@ -480,6 +492,10 @@ export interface Database {
       my_branch_id: {
         Args: Record<never, never>
         Returns: string
+      }
+      set_template_as_default: {
+        Args: { p_template_id: string; p_customer_id: string }
+        Returns: void
       }
     }
     Enums: Record<never, never>

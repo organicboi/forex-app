@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import type { Database } from '@/types/database.types'
+
+type ScreenUpdate = Database['public']['Tables']['screens']['Update']
 
 async function getAuthedAdmin() {
   const supabase = await createClient()
@@ -37,7 +40,7 @@ export async function PATCH(
   const body = await request.json().catch(() => null)
   if (!body) return Response.json({ error: 'Invalid body' }, { status: 400 })
 
-  const updates: Record<string, unknown> = {}
+  const updates: ScreenUpdate = {}
   if (body.name !== undefined) {
     if (!body.name?.trim()) return Response.json({ error: 'Name cannot be empty' }, { status: 400 })
     updates.name = body.name.trim()

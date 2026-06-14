@@ -192,6 +192,42 @@ export default function LiveDisplay({ token }: { token: string | null }) {
     return () => clearInterval(t);
   }, [token]);
 
+  // ── Derived values needed by hooks (computed before any early return) ──────
+  const isPortrait = (tvData?.screen_orientation ?? "landscape") === "portrait";
+  const RATES_PER_PAGE = isPortrait ? 8 : 7;
+  const currencies = tvData?.currencies ?? [];
+  const ads = tvData?.ads ?? [];
+  const totalRatePages = Math.max(Math.ceil(currencies.length / RATES_PER_PAGE), 1);
+
+  // ── Rate page cycling ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (currencies.length === 0) return;
+    let transitionTimer: ReturnType<typeof setTimeout> | undefined;
+    const pageTimer = setInterval(() => {
+      setRatesChanging(true);
+      transitionTimer = setTimeout(() => {
+        setRatePage((p) => (p + 1) % totalRatePages);
+        setRatesChanging(false);
+      }, 350);
+    }, RATE_PAGE_INTERVAL_MS);
+    return () => {
+      clearInterval(pageTimer);
+      if (transitionTimer) clearTimeout(transitionTimer);
+    };
+  }, [totalRatePages, currencies.length]);
+
+  // ── Ad cycling (timer for images; videos advance via onEnded) ────────────
+  useEffect(() => {
+    if (ads.length === 0) return;
+    const currentAd = ads[adIndex];
+    if (!currentAd || currentAd.file_type === "video") return;
+    const duration = (currentAd.duration_seconds ?? 10) * 1000;
+    const t = setTimeout(() => {
+      setAdIndex((i) => (i + 1) % ads.length);
+    }, duration);
+    return () => clearTimeout(t);
+  }, [adIndex, ads]);
+
   // ── Guard states ──────────────────────────────────────────────────────────
   if (!token) {
     return (
@@ -222,16 +258,11 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   }
 
   // ── Display values ────────────────────────────────────────────────────────
-  const isPortrait = (tvData.screen_orientation ?? "landscape") === "portrait";
-  const RATES_PER_PAGE = isPortrait ? 8 : 7;
-
   const customer = tvData.customer!;
   const ticker = tvData.ticker ?? [];
   const PURPLE = customer.primary_color || "#4c195a";
   const displayName = customer.business_name || customer.name;
   const branchName = tvData.branch_name ?? "";
-  const currencies = tvData.currencies ?? [];
-  const ads = tvData.ads ?? [];
 
   // Resolve visible columns from template or fall back to hardcoded defaults
   const visibleColumns: ColumnDef[] = tvData.template_columns
@@ -242,8 +273,6 @@ export default function LiveDisplay({ token }: { token: string | null }) {
         { key: "transfer", label: "TRANSFER", color: PURPLE,     visible: true, order: 2, is_builtin: true },
       ];
 
-  const colsGrid = `1.3fr repeat(${visibleColumns.length}, 1fr)`;
-  const totalRatePages = Math.max(Math.ceil(currencies.length / RATES_PER_PAGE), 1);
   const visibleRates = currencies.slice(ratePage * RATES_PER_PAGE, (ratePage + 1) * RATES_PER_PAGE);
   const rateSlots: Array<CurrencyRate | null> = [
     ...visibleRates,
@@ -251,85 +280,142 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   ];
   const tickerItems = ticker.length > 0 ? ticker : ["Exchange rates shown are for reference only"];
 
-  // ── Rate page cycling ─────────────────────────────────────────────────────
-  useEffect(() => {
-    if (currencies.length === 0) return;
-    let transitionTimer: ReturnType<typeof setTimeout> | undefined;
-    const pageTimer = setInterval(() => {
-      setRatesChanging(true);
-      transitionTimer = setTimeout(() => {
-        setRatePage((p) => (p + 1) % totalRatePages);
-        setRatesChanging(false);
-      }, 350);
-    }, RATE_PAGE_INTERVAL_MS);
-    return () => {
-      clearInterval(pageTimer);
-      if (transitionTimer) clearTimeout(transitionTimer);
-    };
-  }, [totalRatePages, currencies.length]);
-
-  // ── Ad cycling (per-ad duration) ──────────────────────────────────────────
-  useEffect(() => {
-    if (ads.length === 0) return;
-    const duration = (ads[adIndex]?.duration_seconds ?? 10) * 1000;
-    const t = setTimeout(() => {
-      setAdIndex((i) => (i + 1) % ads.length);
-    }, duration);
-    return () => clearTimeout(t);
-  }, [adIndex, ads]);
-
   // ── Portrait-aware styles ──────────────────────────────────────────────────
+  // In portrait, vw units become tiny (narrow screen) — swap to vh/vmin throughout.
+  // Rate numbers also need to be capped by column width so they never overflow.
+
   const mainStyle: React.CSSProperties = isPortrait
-    ? { minHeight: 0, display: "grid", gridTemplateColumns: "1fr", gridTemplateRows: "1fr 40%" }
+    ? { minHeight: 0, display: "grid", gridTemplateColumns: "1fr", gridTemplateRows: "1fr 35%" }
     : { minHeight: 0, display: "grid", gridTemplateColumns: "64% 36%" };
 
-  const ratesCellFontSize = isPortrait ? "clamp(22px, 3.5vh, 76px)" : "clamp(28px, 3.2vw, 88px)";
-  const headerCellFontSize = isPortrait ? "clamp(16px, 1.9vh, 38px)" : "clamp(18px, 1.9vw, 42px)";
-  const currencyCodeFontSize = isPortrait ? "clamp(18px, 2.6vh, 50px)" : "clamp(20px, 2.2vw, 54px)";
-  const currencyNameFontSize = isPortrait ? "clamp(10px, 1.3vh, 20px)" : "clamp(12px, 1.1vw, 22px)";
-  const flagWidth = isPortrait ? "clamp(30px, 2.5vh, 52px)" : "clamp(36px, 2.8vw, 58px)";
+  // Narrower currency column in portrait gives each rate column more room
+  const colsGrid = isPortrait
+    ? `1.1fr repeat(${visibleColumns.length}, 1fr)`
+    : `1.3fr repeat(${visibleColumns.length}, 1fr)`;
+
+  // Font capped so numbers fit: portrait width ÷ (col fraction × 6 chars × char-width-ratio)
+  const ratesCellFontSize = isPortrait
+    ? `clamp(14px, min(3.5vh, ${(30 / (1.1 + visibleColumns.length)).toFixed(1)}vw), 76px)`
+    : "clamp(28px, 3.2vw, 88px)";
+
+  const headerCellFontSize = isPortrait ? "clamp(12px, 1.7vh, 34px)" : "clamp(18px, 1.9vw, 42px)";
+  const currencyCodeFontSize = isPortrait ? "clamp(15px, 2.3vh, 44px)" : "clamp(20px, 2.2vw, 54px)";
+  const currencyNameFontSize = isPortrait ? "clamp(9px, 1.1vh, 17px)" : "clamp(12px, 1.1vw, 22px)";
+  const flagWidth = isPortrait ? "clamp(24px, 2.1vh, 44px)" : "clamp(36px, 2.8vw, 58px)";
 
   const promotionPanelStyle: React.CSSProperties = isPortrait
     ? { ...promotionPanel, borderLeft: "none", borderTop: "3px solid #c0b8b0" }
     : promotionPanel;
 
+  // Per-element portrait overrides (p-prefixed = portrait-aware computed style)
+  const pScreen: React.CSSProperties = {
+    ...screenStyle,
+    gridTemplateRows: isPortrait ? "8vh 1fr 5.5vh" : "10vh 1fr 8vh",
+  };
+  const pHeader: React.CSSProperties = {
+    ...header,
+    padding: isPortrait ? "0 2vw" : "0 2.2vw",
+    gap: isPortrait ? "1.5vw" : "2vw",
+  };
+  const pBrand: React.CSSProperties = {
+    ...brand,
+    gap: isPortrait ? "1.5vw" : "0.9vw",
+  };
+  const pLogoStyle: React.CSSProperties = {
+    height: isPortrait ? "4vh" : "6vh",
+    maxWidth: isPortrait ? "18vw" : "10vw",
+    objectFit: "contain",
+  };
+  const pBrandName: React.CSSProperties = {
+    ...brandName,
+    fontSize: isPortrait ? "clamp(13px, 2.8vh, 24px)" : "clamp(18px, 1.6vw, 32px)",
+  };
+  const pHeaderTitle: React.CSSProperties = {
+    ...headerTitle,
+    fontSize: isPortrait ? "clamp(11px, 1.7vh, 20px)" : "clamp(20px, 1.8vw, 36px)",
+    gap: isPortrait ? "0.8vh" : "0.65vw",
+  };
+  const pLiveDot: React.CSSProperties = {
+    ...liveDot,
+    width: isPortrait ? "1vh" : "0.8vw",
+    height: isPortrait ? "1vh" : "0.8vw",
+    minWidth: isPortrait ? "9px" : "12px",
+    minHeight: isPortrait ? "9px" : "12px",
+  };
+  const pBranchInBrand: React.CSSProperties = {
+    color: "#8c848e",
+    fontFamily: "'Barlow Condensed', sans-serif",
+    fontSize: isPortrait ? "clamp(8px, 1.1vh, 14px)" : "clamp(11px, 0.95vw, 18px)",
+    fontWeight: 700,
+    letterSpacing: "0.14em",
+    marginTop: "0.25vh",
+  };
+  const pClock: React.CSSProperties = {
+    ...clock,
+    minWidth: isPortrait ? "auto" : "8.6vw",
+    paddingLeft: isPortrait ? "2.5vw" : "1.4vw",
+  };
+  const pClockTime: React.CSSProperties = {
+    ...clockTime,
+    fontSize: isPortrait ? "clamp(16px, 2.8vh, 38px)" : "clamp(26px, 2.4vw, 50px)",
+  };
+  const pClockDate: React.CSSProperties = {
+    ...clockDate,
+    fontSize: isPortrait ? "clamp(8px, 1.1vh, 14px)" : "clamp(12px, 1vw, 20px)",
+  };
+  const pRatesSection: React.CSSProperties = {
+    ...ratesSection,
+    padding: isPortrait ? "0.8vh 2vw 1vh" : "1.5vh 2.2vw 1.6vh",
+  };
+  const pTable: React.CSSProperties = {
+    ...table,
+    gridTemplateRows: isPortrait ? "5.5vh 0.6vh 1fr" : "7vh 0.8vh 1fr",
+  };
+  const pCurrencyCol: React.CSSProperties = {
+    ...currencyColumn,
+    gap: isPortrait ? "1.5vw" : "0.7vw",
+  };
+  const pTickerItem: React.CSSProperties = {
+    ...tickerItem,
+    fontSize: isPortrait ? "clamp(12px, 1.8vh, 24px)" : "clamp(16px, 1.8vw, 34px)",
+    gap: isPortrait ? "5vw" : "2.4vw",
+    paddingLeft: isPortrait ? "5vw" : "2.4vw",
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={screenStyle}>
+    <div style={pScreen}>
       {/* ── Header ── */}
-      <header style={{ ...header, borderBottomColor: ORANGE }}>
-        {/* Brand */}
-        <div style={brand}>
+      <header style={{ ...pHeader, borderBottomColor: ORANGE }}>
+        {/* Brand + Branch */}
+        <div style={pBrand}>
           {customer.logo_url && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={customer.logo_url}
               alt=""
-              style={{ height: "6vh", maxWidth: "10vw", objectFit: "contain" }}
+              style={pLogoStyle}
             />
           )}
           <div>
-            <div style={{ ...brandName, color: PURPLE }}>{displayName}</div>
+            <div style={{ ...pBrandName, color: PURPLE }}>{displayName}</div>
+            {branchName && (
+              <div style={pBranchInBrand}>{branchName.toUpperCase()}</div>
+            )}
           </div>
         </div>
 
         {/* Centre title */}
-        <div style={headerTitle}>
-          <span style={{ ...liveDot, backgroundColor: ORANGE }} />
+        <div style={pHeaderTitle}>
+          <span style={{ ...pLiveDot, backgroundColor: ORANGE }} />
           LIVE EXCHANGE RATES
         </div>
 
-        {/* Right: branch + clock */}
-        <div style={headerInfo}>
-          {branchName && (
-            <div style={branchBlock}>
-              <span style={infoLabel}>BRANCH</span>
-              <span style={infoValue}>{branchName.toUpperCase()}</span>
-            </div>
-          )}
-          <div style={{ ...clock, borderLeftColor: PURPLE }}>
-            <span style={{ ...clockTime, color: PURPLE }}>{time}</span>
-            <span style={clockDate}>{date}</span>
+        {/* Right: clock */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+          <div style={{ ...pClock, borderLeftColor: PURPLE }}>
+            <span style={{ ...pClockTime, color: PURPLE }}>{time}</span>
+            <span style={pClockDate}>{date}</span>
           </div>
         </div>
       </header>
@@ -337,11 +423,11 @@ export default function LiveDisplay({ token }: { token: string | null }) {
       {/* ── Main ── */}
       <main style={mainStyle}>
         {/* Rates */}
-        <section style={ratesSection}>
-          <div style={table}>
+        <section style={pRatesSection}>
+          <div style={pTable}>
             {/* Column headers */}
             <div style={{ ...tableHeader, borderBottomColor: PURPLE, gridTemplateColumns: colsGrid }}>
-              <div style={{ ...headerCell, ...currencyColumn, fontSize: headerCellFontSize }}>CURRENCY</div>
+              <div style={{ ...headerCell, ...pCurrencyCol, fontSize: headerCellFontSize }}>CURRENCY</div>
               {visibleColumns.map((col) => (
                 <div key={col.key} style={{ ...headerCell, color: col.color, fontSize: headerCellFontSize }}>
                   {col.label.toUpperCase()}
@@ -374,7 +460,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
                     }}
                   >
                     {/* Currency cell */}
-                    <div style={{ ...rateCell, ...currencyColumn }}>
+                    <div style={{ ...rateCell, ...pCurrencyCol }}>
                       <Image
                         src={rate.flag_path}
                         alt=""
@@ -426,23 +512,18 @@ export default function LiveDisplay({ token }: { token: string | null }) {
                 {displayName.toUpperCase()}
               </div>
             </div>
-          ) : (
-            ads.map((ad, index) => (
-              <div
-                key={ad.id}
-                style={{
-                  ...promotionSlide,
-                  opacity: index === adIndex ? 1 : 0,
-                  pointerEvents: index === adIndex ? "auto" : "none",
-                }}
-              >
+          ) : (() => {
+            const ad = ads[adIndex];
+            if (!ad) return null;
+            return (
+              <div key={ad.id} style={promotionSlide}>
                 {ad.file_type === "video" ? (
                   <video
                     src={ad.file_url}
                     autoPlay
                     muted
-                    loop
                     playsInline
+                    onEnded={() => setAdIndex((i) => (i + 1) % ads.length)}
                     style={promotionMedia}
                   />
                 ) : (
@@ -450,17 +531,9 @@ export default function LiveDisplay({ token }: { token: string | null }) {
                   <img src={ad.file_url} alt="" style={promotionMedia} />
                 )}
               </div>
-            ))
-          )}
+            );
+          })()}
 
-          {ads.length > 1 && (
-            <div style={{ ...promotionFooter, backgroundColor: PURPLE }}>
-              <span style={promotionFooterText}>{displayName}</span>
-              <span style={{ color: "#ffad78", fontFamily: "'Roboto Mono', monospace" }}>
-                {String(adIndex + 1).padStart(2, "0")} / {String(ads.length).padStart(2, "0")}
-              </span>
-            </div>
-          )}
         </aside>
       </main>
 
@@ -469,11 +542,26 @@ export default function LiveDisplay({ token }: { token: string | null }) {
         <div style={tickerViewport}>
           <div style={tickerTrack}>
             {[...tickerItems, ...tickerItems].map((item, index) => (
-              <span key={index} style={tickerItem}>
+              <span key={index} style={pTickerItem}>
                 {item}
                 <span style={{ color: ORANGE, fontWeight: 700 }}> /</span>
               </span>
             ))}
+          </div>
+        </div>
+
+        {/* Powered by badge */}
+        <div style={poweredByWrapper}>
+          <span style={poweredByLabel}>Powered by</span>
+          <div style={poweredByPill}>
+            <Image
+              src="/brand/brandLogo.png"
+              alt="TechBiz Systems Services"
+              width={90}
+              height={30}
+              style={poweredByLogo}
+              unoptimized
+            />
           </div>
         </div>
       </footer>
@@ -547,36 +635,6 @@ const liveDot: React.CSSProperties = {
   animation: "livePulse 2s ease-in-out infinite",
 };
 
-const headerInfo: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "flex-end",
-  gap: "1.6vw",
-};
-
-const branchBlock: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "flex-end",
-  lineHeight: 1.15,
-};
-
-const infoLabel: React.CSSProperties = {
-  color: "#8c848e",
-  fontFamily: "'Barlow Condensed', sans-serif",
-  fontSize: "clamp(11px, 0.9vw, 18px)",
-  fontWeight: 700,
-  letterSpacing: "0.18em",
-};
-
-const infoValue: React.CSSProperties = {
-  marginTop: "0.3vh",
-  color: INK,
-  fontFamily: "'Barlow Condensed', sans-serif",
-  fontSize: "clamp(16px, 1.5vw, 30px)",
-  fontWeight: 700,
-  letterSpacing: "0.06em",
-};
 
 const clock: React.CSSProperties = {
   display: "flex",
@@ -632,6 +690,7 @@ const headerCell: React.CSSProperties = {
   fontWeight: 700,
   letterSpacing: "0.13em",
   textAlign: "right",
+  overflow: "hidden",
 };
 
 const currencyColumn: React.CSSProperties = {
@@ -775,4 +834,39 @@ const tickerItem: React.CSSProperties = {
   fontSize: "clamp(16px, 1.8vw, 34px)",
   fontWeight: 700,
   letterSpacing: "0.05em",
+};
+
+const poweredByWrapper: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "clamp(2px, 0.4vh, 5px)",
+  paddingLeft: "clamp(12px, 1.6vw, 28px)",
+  paddingRight: "clamp(12px, 1.8vw, 32px)",
+  borderLeft: "1px solid rgba(255,255,255,0.12)",
+  flexShrink: 0,
+};
+
+const poweredByLabel: React.CSSProperties = {
+  color: "rgba(255,255,255,0.45)",
+  fontFamily: "'Barlow', sans-serif",
+  fontSize: "clamp(7px, 0.6vw, 11px)",
+  fontWeight: 600,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  whiteSpace: "nowrap",
+};
+
+const poweredByPill: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+};
+
+const poweredByLogo: React.CSSProperties = {
+  height: "clamp(22px, 3.2vh, 38px)",
+  width: "auto",
+  objectFit: "contain",
+  display: "block",
+  filter: "brightness(0) invert(1)",
 };

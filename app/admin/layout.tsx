@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { requireAdmin, getCustomerWithPlan, isPlanExpired, isPlanExpiringSoon } from '@/lib/auth'
 import AdminSidebar from './AdminSidebar'
+import { ToastProvider } from './ToastContext'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAdmin()
@@ -32,9 +33,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             Your subscription expires on <strong>{expiryDate}</strong>. Contact your provider to renew.
           </div>
         )}
-        <main className="flex-1 overflow-y-auto p-6">
-          {children}
-        </main>
+        <ToastProvider>
+          <main className="flex-1 overflow-y-auto p-6">
+            {children}
+          </main>
+        </ToastProvider>
       </div>
     </div>
   )

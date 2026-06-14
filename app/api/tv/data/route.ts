@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       .select('columns')
       .eq('id', screen.template_id)
       .single()
-    if (tpl) templateColumns = tpl.columns as ColumnDef[]
+    if (tpl) templateColumns = tpl.columns as unknown as ColumnDef[]
   }
 
   if (!templateColumns) {
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       .eq('customer_id', screen.customer_id)
       .eq('is_default', true)
       .single()
-    if (defaultTpl) templateColumns = defaultTpl.columns as ColumnDef[]
+    if (defaultTpl) templateColumns = defaultTpl.columns as unknown as ColumnDef[]
   }
 
   // Resolve screen-specific ads: if screen has assignments, use those instead of RPC ads

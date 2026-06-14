@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import TemplateEditor, { type ColumnDef, type DisplayTemplate } from './TemplateEditor'
+import { useToast } from '../ToastContext'
 
 interface ImportPreviewRow {
   row_index: number
@@ -27,6 +28,7 @@ interface Props {
 }
 
 export default function TemplateManager({ initialTemplates }: Props) {
+  const { toast } = useToast()
   const [templates, setTemplates] = useState<DisplayTemplate[]>(initialTemplates)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<DisplayTemplate | null>(null)
@@ -57,7 +59,7 @@ export default function TemplateManager({ initialTemplates }: Props) {
           body: JSON.stringify({ name, columns }),
         })
         const data = await res.json()
-        if (!res.ok) { alert(data.error ?? 'Failed to save'); return }
+        if (!res.ok) { toast(data.error ?? 'Failed to save', 'error'); return }
         setTemplates((prev) => prev.map((t) => (t.id === id ? data : t)))
       } else {
         const res = await fetch('/api/templates', {
@@ -66,10 +68,11 @@ export default function TemplateManager({ initialTemplates }: Props) {
           body: JSON.stringify({ name, columns }),
         })
         const data = await res.json()
-        if (!res.ok) { alert(data.error ?? 'Failed to create'); return }
+        if (!res.ok) { toast(data.error ?? 'Failed to create', 'error'); return }
         setTemplates((prev) => [...prev, data])
       }
       closeEditor()
+      toast('Template saved')
     } finally {
       setEditorSaving(false)
     }
@@ -83,6 +86,7 @@ export default function TemplateManager({ initialTemplates }: Props) {
       const data = await res.json()
       if (!res.ok) { setActionError((prev) => ({ ...prev, [templateId]: data.error ?? 'Failed' })); return }
       setTemplates((prev) => prev.map((t) => ({ ...t, is_default: t.id === templateId })))
+      toast('Default template updated')
     } finally {
       setSettingDefault(null)
     }
@@ -96,6 +100,7 @@ export default function TemplateManager({ initialTemplates }: Props) {
       const data = await res.json()
       if (!res.ok) { setActionError((prev) => ({ ...prev, [templateId]: data.error ?? 'Failed to delete' })); return }
       setTemplates((prev) => prev.filter((t) => t.id !== templateId))
+      toast('Template deleted')
     } finally {
       setDeleting(null)
     }
@@ -111,8 +116,9 @@ export default function TemplateManager({ initialTemplates }: Props) {
       }),
     })
     const data = await res.json()
-    if (!res.ok) { alert(data.error ?? 'Failed to duplicate'); return }
+    if (!res.ok) { toast(data.error ?? 'Failed to duplicate', 'error'); return }
     setTemplates((prev) => [...prev, data])
+    toast('Template duplicated')
   }
 
   function handleDownloadExcel(template: DisplayTemplate) {

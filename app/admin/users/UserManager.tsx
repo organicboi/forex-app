@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useToast } from '../ToastContext'
 
 interface BranchSummary {
   id: string
@@ -29,6 +30,7 @@ interface Props {
 
 export default function UserManager({ initialUsers, branches, currentUserId }: Props) {
   const router = useRouter()
+  const { toast } = useToast()
   const [users, setUsers] = useState<User[]>(initialUsers)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -68,6 +70,7 @@ export default function UserManager({ initialUsers, branches, currentUserId }: P
       setForm({ email: '', password: '', full_name: '', branch_id: '' })
       setShowCreate(false)
       router.refresh()
+      toast('User created')
     } finally {
       setCreating(false)
     }
@@ -83,6 +86,8 @@ export default function UserManager({ initialUsers, branches, currentUserId }: P
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, is_active: !current } : u))
       )
+    } else {
+      toast('Failed to update user', 'error')
     }
   }
 
@@ -92,6 +97,9 @@ export default function UserManager({ initialUsers, branches, currentUserId }: P
     if (res.ok) {
       setUsers((prev) => prev.filter((u) => u.id !== userId))
       router.refresh()
+      toast('User deleted')
+    } else {
+      toast('Failed to delete user', 'error')
     }
   }
 
@@ -103,6 +111,9 @@ export default function UserManager({ initialUsers, branches, currentUserId }: P
     })
     if (res.ok) {
       router.refresh()
+      toast('Branch assignment updated')
+    } else {
+      toast('Failed to update branch assignment', 'error')
     }
   }
 

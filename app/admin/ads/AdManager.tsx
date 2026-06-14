@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import Image from 'next/image'
+import { useToast } from '../ToastContext'
 
 interface Ad {
   id: string
@@ -31,6 +32,7 @@ type TypeFilter = 'all' | 'image' | 'video'
 const ALLOWED_MIME = 'image/jpeg,image/jpg,image/png,image/webp,image/gif,video/mp4,video/webm'
 
 export default function AdManager({ initialAds, branches, storageMb }: Props) {
+  const { toast } = useToast()
   const [ads, setAds] = useState<Ad[]>(initialAds)
   const [selectedBranch, setSelectedBranch] = useState<string>('')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
@@ -110,6 +112,7 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
       setAds((prev) => [...prev, metaData])
       if (fileRef.current) fileRef.current.value = ''
       setUploadProgress('')
+      toast('Ad uploaded')
     } catch {
       setUploadError('Upload failed — check your connection')
     } finally {
@@ -128,6 +131,8 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
       setAds((prev) =>
         prev.map((a) => (a.id === id ? { ...a, is_active: !current } : a))
       )
+    } else {
+      toast('Failed to update ad', 'error')
     }
   }
 
@@ -136,6 +141,9 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
     const res = await fetch(`/api/ads/${id}`, { method: 'DELETE' })
     if (res.ok) {
       setAds((prev) => prev.filter((a) => a.id !== id))
+      toast('Ad deleted')
+    } else {
+      toast('Failed to delete ad', 'error')
     }
   }
 
@@ -151,6 +159,9 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
       setAds((prev) =>
         prev.map((a) => (a.id === id ? { ...a, duration_seconds: value } : a))
       )
+      toast('Duration updated')
+    } else {
+      toast('Failed to update duration', 'error')
     }
   }
 

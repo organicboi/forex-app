@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import type { Database } from '@/types/database.types'
+
+type TemplateUpdate = Database['public']['Tables']['display_templates']['Update']
 
 async function getAuthedAdmin() {
   const supabase = await createClient()
@@ -27,7 +30,7 @@ export async function PATCH(
   if (!body) return Response.json({ error: 'Invalid body' }, { status: 400 })
 
   const supabase = createAdminClient()
-  const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  const update: TemplateUpdate = { updated_at: new Date().toISOString() }
   if (body.name !== undefined) update.name = String(body.name).trim()
   if (body.columns !== undefined) update.columns = body.columns
 
