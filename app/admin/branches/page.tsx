@@ -7,7 +7,7 @@ export default async function BranchesPage() {
   const customer = await getCustomerWithPlan(user.customer_id)
   const supabase = createAdminClient()
 
-  const [{ data: branches }, { data: status }] = await Promise.all([
+  const [{ data: branches }, { data: statusRows }, { data: screensData }] = await Promise.all([
     supabase
       .from('branches')
       .select('id, name, location_note, layout, allow_user_rate_edit, is_active, created_at, branch_token')
@@ -17,16 +17,37 @@ export default async function BranchesPage() {
       .from('v_branch_screen_status')
       .select('branch_id, screens_online, screens_total')
       .eq('customer_id', user.customer_id),
+    supabase
+      .from('screens')
+      .select('branch_id, template_id, display_templates(name)')
+      .eq('customer_id', user.customer_id),
   ])
 
   const statusMap = Object.fromEntries(
-    (status ?? []).map((s) => [s.branch_id, s])
+    (statusRows ?? []).map((s) => [s.branch_id, s])
   )
+
+  // Build per-branch screen count and template names
+  const screenCountMap: Record<string, number> = {}
+  const templateNamesMap: Record<string, string[]> = {}
+
+  for (const s of screensData ?? []) {
+    screenCountMap[s.branch_id] = (screenCountMap[s.branch_id] ?? 0) + 1
+    const tpl = s.display_templates as unknown as { name: string } | null
+    if (tpl?.name) {
+      const existing = templateNamesMap[s.branch_id] ?? []
+      if (!existing.includes(tpl.name)) {
+        templateNamesMap[s.branch_id] = [...existing, tpl.name]
+      }
+    }
+  }
 
   const merged = (branches ?? []).map((b) => ({
     ...b,
     screens_online: statusMap[b.id]?.screens_online ?? 0,
     screens_total: statusMap[b.id]?.screens_total ?? 0,
+    configured_screens: screenCountMap[b.id] ?? 0,
+    templates_used: templateNamesMap[b.id] ?? [],
   }))
 
   return (

@@ -13,6 +13,15 @@ interface CustomerInfo {
   base_currency: string;
 }
 
+interface ColumnDef {
+  key: string;
+  label: string;
+  color: string;
+  visible: boolean;
+  order: number;
+  is_builtin: boolean;
+}
+
 interface CurrencyRate {
   code: string;
   name: string;
@@ -21,6 +30,7 @@ interface CurrencyRate {
   buy: number;
   sell: number;
   transfer: number;
+  extra_values?: Record<string, number>;
 }
 
 interface AdItem {
@@ -38,11 +48,12 @@ interface TVData {
   currencies?: CurrencyRate[];
   ads?: AdItem[];
   ticker?: string[];
+  template_columns?: ColumnDef[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const RATES_PER_PAGE = 10;
+const RATES_PER_PAGE = 7;
 const RATE_PAGE_INTERVAL_MS = 8000;
 const POLL_INTERVAL_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -50,6 +61,8 @@ const ORANGE = "#ef6c21";
 const INK = "#17131a";
 const WHITE = "#ffffff";
 const PAPER = "#f2eee8";
+const BUY_COLOR = "#16a34a";
+const SELL_COLOR = "#dc2626";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -105,7 +118,7 @@ function FullScreen({ title, body }: { title: string; body: string }) {
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: PAPER,
-        fontFamily: "'Inter', sans-serif",
+        fontFamily: "'Barlow', sans-serif",
         gap: "1.5vh",
       }}
     >
@@ -115,7 +128,7 @@ function FullScreen({ title, body }: { title: string; body: string }) {
       {body && (
         <div style={{ fontSize: "clamp(12px, 1vw, 20px)", color: "#756d78" }}>{body}</div>
       )}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@500;600;700&family=Roboto+Mono:wght@500;700&display=swap');`}</style>
     </div>
   );
 }
@@ -246,6 +259,17 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   const displayName = customer.business_name || customer.name;
   const branchName = tvData.branch_name ?? "";
 
+  // Resolve visible columns from template or fall back to hardcoded defaults
+  const visibleColumns: ColumnDef[] = tvData.template_columns
+    ? tvData.template_columns.filter((c) => c.visible).sort((a, b) => a.order - b.order)
+    : [
+        { key: "buy",      label: "BUY",      color: BUY_COLOR,  visible: true, order: 0, is_builtin: true },
+        { key: "sell",     label: "SELL",     color: SELL_COLOR, visible: true, order: 1, is_builtin: true },
+        { key: "transfer", label: "TRANSFER", color: PURPLE,     visible: true, order: 2, is_builtin: true },
+      ];
+
+  const colsGrid = `1.3fr repeat(${visibleColumns.length}, 1fr)`;
+
   const visibleRates = currencies.slice(
     ratePage * RATES_PER_PAGE,
     (ratePage + 1) * RATES_PER_PAGE,
@@ -303,28 +327,14 @@ export default function LiveDisplay({ token }: { token: string | null }) {
         {/* Rates */}
         <section style={ratesSection}>
           <div style={table}>
-            {/* Meta row */}
-            <div style={rateMeta}>
-              <span style={rateMetaItem}>
-                <span style={rateMetaLabel}>BASE</span>
-                <span style={{ ...rateMetaValue, color: PURPLE }}>{customer.base_currency}</span>
-              </span>
-              <span style={rateMetaDivider} />
-              <span style={rateMetaItem}>
-                <span style={rateMetaLabel}>PAGE</span>
-                <span style={{ ...rateMetaValue, color: PURPLE }}>
-                  {String(ratePage + 1).padStart(2, "0")}&thinsp;/&thinsp;
-                  {String(totalRatePages).padStart(2, "0")}
-                </span>
-              </span>
-            </div>
-
-            {/* Column headers */}
-            <div style={{ ...tableHeader, borderBottomColor: PURPLE }}>
+            {/* Column headers — dynamic */}
+            <div style={{ ...tableHeader, borderBottomColor: PURPLE, gridTemplateColumns: colsGrid }}>
               <div style={{ ...headerCell, ...currencyColumn }}>CURRENCY</div>
-              <div style={headerCell}>BUY</div>
-              <div style={headerCell}>SELL</div>
-              <div style={headerCell}>TRANSFER</div>
+              {visibleColumns.map((col) => (
+                <div key={col.key} style={{ ...headerCell, color: col.color }}>
+                  {col.label.toUpperCase()}
+                </div>
+              ))}
             </div>
 
             {/* Progress bar */}
@@ -332,7 +342,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
               <div key={ratePage} style={{ ...rateProgress, backgroundColor: ORANGE }} />
             </div>
 
-            {/* Rows */}
+            {/* Rows — dynamic */}
             <div
               style={{
                 ...tableBody,
@@ -342,7 +352,15 @@ export default function LiveDisplay({ token }: { token: string | null }) {
             >
               {rateSlots.map((rate, index) =>
                 rate ? (
-                  <div key={rate.code} style={rateRow}>
+                  <div
+                    key={rate.code}
+                    style={{
+                      ...rateRow,
+                      gridTemplateColumns: colsGrid,
+                      backgroundColor: index % 2 === 1 ? "rgba(23,19,26,0.045)" : "transparent",
+                    }}
+                  >
+                    {/* Currency cell */}
                     <div style={{ ...rateCell, ...currencyColumn }}>
                       <Image
                         src={rate.flag_path}
@@ -357,15 +375,23 @@ export default function LiveDisplay({ token }: { token: string | null }) {
                         <div style={currencyName}>{rate.name}</div>
                       </div>
                     </div>
-                    <div style={rateCell}>{formatRate(rate.buy, rate.decimal_places)}</div>
-                    <div style={rateCell}>{formatRate(rate.sell, rate.decimal_places)}</div>
-                    <div style={{ ...rateCell, ...transferCell, color: PURPLE }}>
-                      {formatRate(rate.transfer, rate.decimal_places)}
-                    </div>
+
+                    {/* Rate cells — dynamic */}
+                    {visibleColumns.map((col) => {
+                      const value = col.is_builtin
+                        ? (rate as unknown as Record<string, number>)[col.key] ?? 0
+                        : rate.extra_values?.[col.key] ?? 0;
+                      return (
+                        <div
+                          key={col.key}
+                          style={{ ...rateCell, color: col.color, fontWeight: 800, textAlign: "right" }}
+                        >
+                          {formatRate(value, rate.decimal_places)}
+                        </div>
+                      );
+                    })}
                   </div>
-                ) : (
-                  <div key={`empty-${index}`} style={emptyRateRow} />
-                ),
+                ) : null,
               )}
             </div>
           </div>
@@ -417,7 +443,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
           {ads.length > 1 && (
             <div style={{ ...promotionFooter, backgroundColor: PURPLE }}>
               <span style={promotionFooterText}>{displayName}</span>
-              <span style={{ color: "#ffad78", fontFamily: "'DM Mono', monospace" }}>
+              <span style={{ color: "#ffad78", fontFamily: "'Roboto Mono', monospace" }}>
                 {String(adIndex + 1).padStart(2, "0")} / {String(ads.length).padStart(2, "0")}
               </span>
             </div>
@@ -440,11 +466,12 @@ export default function LiveDisplay({ token }: { token: string | null }) {
       </footer>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@500;600;700&family=Roboto+Mono:wght@500;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { width: 100%; height: 100%; overflow: hidden; background: ${PAPER}; }
         @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         @keyframes rateProgress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+        @keyframes livePulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.75); } }
       `}</style>
     </div>
   );
@@ -457,10 +484,10 @@ const screen: React.CSSProperties = {
   height: "100vh",
   overflow: "hidden",
   display: "grid",
-  gridTemplateRows: "10vh 1fr 5.5vh",
+  gridTemplateRows: "10vh 1fr 8vh",
   backgroundColor: PAPER,
   color: INK,
-  fontFamily: "'Inter', sans-serif",
+  fontFamily: "'Barlow', sans-serif",
 };
 
 const header: React.CSSProperties = {
@@ -480,9 +507,10 @@ const brand: React.CSSProperties = {
 };
 
 const brandName: React.CSSProperties = {
-  fontSize: "clamp(16px, 1.35vw, 28px)",
-  fontWeight: 700,
-  letterSpacing: "0.08em",
+  fontFamily: "'Barlow Condensed', sans-serif",
+  fontSize: "clamp(18px, 1.6vw, 32px)",
+  fontWeight: 800,
+  letterSpacing: "0.06em",
 };
 
 const headerTitle: React.CSSProperties = {
@@ -490,18 +518,20 @@ const headerTitle: React.CSSProperties = {
   alignItems: "center",
   gap: "0.65vw",
   color: INK,
-  fontSize: "clamp(17px, 1.45vw, 30px)",
-  fontWeight: 600,
-  letterSpacing: "0.08em",
+  fontFamily: "'Barlow Condensed', sans-serif",
+  fontSize: "clamp(20px, 1.8vw, 36px)",
+  fontWeight: 700,
+  letterSpacing: "0.06em",
   whiteSpace: "nowrap",
 };
 
 const liveDot: React.CSSProperties = {
-  width: "0.6vw",
-  height: "0.6vw",
-  minWidth: "9px",
-  minHeight: "9px",
+  width: "0.8vw",
+  height: "0.8vw",
+  minWidth: "12px",
+  minHeight: "12px",
   borderRadius: "50%",
+  animation: "livePulse 2s ease-in-out infinite",
 };
 
 const headerInfo: React.CSSProperties = {
@@ -520,15 +550,17 @@ const branchBlock: React.CSSProperties = {
 
 const infoLabel: React.CSSProperties = {
   color: "#8c848e",
-  fontSize: "clamp(8px, 0.55vw, 12px)",
+  fontFamily: "'Barlow Condensed', sans-serif",
+  fontSize: "clamp(11px, 0.9vw, 18px)",
   fontWeight: 700,
   letterSpacing: "0.18em",
 };
 
 const infoValue: React.CSSProperties = {
-  marginTop: "0.45vh",
+  marginTop: "0.3vh",
   color: INK,
-  fontSize: "clamp(13px, 1vw, 21px)",
+  fontFamily: "'Barlow Condensed', sans-serif",
+  fontSize: "clamp(16px, 1.5vw, 30px)",
   fontWeight: 700,
   letterSpacing: "0.06em",
 };
@@ -543,18 +575,20 @@ const clock: React.CSSProperties = {
 };
 
 const clockTime: React.CSSProperties = {
-  fontFamily: "'DM Mono', monospace",
-  fontSize: "clamp(24px, 2.25vw, 46px)",
-  fontWeight: 500,
+  fontFamily: "'Roboto Mono', monospace",
+  fontSize: "clamp(26px, 2.4vw, 50px)",
+  fontWeight: 700,
   letterSpacing: "0.02em",
 };
 
 const clockDate: React.CSSProperties = {
   marginTop: "0.7vh",
   color: "#756d78",
-  fontSize: "clamp(8px, 0.62vw, 13px)",
+  fontFamily: "'Barlow Condensed', sans-serif",
+  fontSize: "clamp(12px, 1vw, 20px)",
   fontWeight: 600,
   textTransform: "uppercase",
+  letterSpacing: "0.08em",
 };
 
 const main: React.CSSProperties = {
@@ -575,52 +609,19 @@ const table: React.CSSProperties = {
   flex: 1,
   minHeight: 0,
   display: "grid",
-  gridTemplateRows: "3vh 6vh 0.4vh 1fr",
-};
-
-const rateMeta: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "flex-end",
-  gap: "1vw",
-};
-
-const rateMetaItem: React.CSSProperties = {
-  display: "flex",
-  alignItems: "baseline",
-  gap: "0.45vw",
-};
-
-const rateMetaLabel: React.CSSProperties = {
-  color: "#9b929e",
-  fontSize: "clamp(8px, 0.52vw, 11px)",
-  fontWeight: 700,
-  letterSpacing: "0.16em",
-};
-
-const rateMetaValue: React.CSSProperties = {
-  fontFamily: "'DM Mono', monospace",
-  fontSize: "clamp(11px, 0.85vw, 18px)",
-  fontWeight: 500,
-};
-
-const rateMetaDivider: React.CSSProperties = {
-  width: "1px",
-  height: "1.4vh",
-  backgroundColor: "#d8d1ca",
-  alignSelf: "center",
+  gridTemplateRows: "7vh 0.8vh 1fr",
 };
 
 const tableHeader: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "2fr repeat(3, 1fr)",
   alignItems: "center",
-  borderBottom: "0.45vh solid",
+  borderBottom: "0.5vh solid",
 };
 
 const headerCell: React.CSSProperties = {
   color: "#756d78",
-  fontSize: "clamp(10px, 0.8vw, 17px)",
+  fontFamily: "'Barlow Condensed', sans-serif",
+  fontSize: "clamp(18px, 1.9vw, 42px)",
   fontWeight: 700,
   letterSpacing: "0.13em",
   textAlign: "right",
@@ -629,20 +630,21 @@ const headerCell: React.CSSProperties = {
 const currencyColumn: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: "1vw",
+  gap: "0.7vw",
   textAlign: "left",
+  overflow: "hidden",
 };
 
 const tableBody: React.CSSProperties = {
   minHeight: 0,
   display: "grid",
-  gridTemplateRows: "repeat(10, minmax(0, 1fr))",
+  gridTemplateRows: "repeat(7, minmax(0, 1fr))",
   transition: "opacity 350ms ease, transform 350ms ease",
 };
 
 const rateProgressTrack: React.CSSProperties = {
   overflow: "hidden",
-  backgroundColor: "#ded7d0",
+  backgroundColor: "#b8afa8",
 };
 
 const rateProgress: React.CSSProperties = {
@@ -655,49 +657,42 @@ const rateProgress: React.CSSProperties = {
 const rateRow: React.CSSProperties = {
   minHeight: 0,
   display: "grid",
-  gridTemplateColumns: "2fr repeat(3, 1fr)",
   alignItems: "center",
-  borderBottom: "1px solid #d8d1ca",
-};
-
-const emptyRateRow: React.CSSProperties = {
-  borderBottom: "1px solid #d8d1ca",
+  borderBottom: "2px solid #c0b8b0",
 };
 
 const rateCell: React.CSSProperties = {
   color: INK,
-  fontFamily: "'DM Mono', monospace",
-  fontSize: "clamp(18px, 1.65vw, 48px)",
-  fontWeight: 500,
+  fontFamily: "'Barlow Condensed', sans-serif",
+  fontSize: "clamp(28px, 3.2vw, 88px)",
+  fontWeight: 800,
   textAlign: "right",
   fontVariantNumeric: "tabular-nums",
 };
 
-const transferCell: React.CSSProperties = {
-  fontWeight: 700,
-};
-
 const flagStyle: React.CSSProperties = {
-  width: "clamp(38px, 2.8vw, 58px)",
+  width: "clamp(36px, 2.8vw, 58px)",
   height: "auto",
-  maxHeight: "4vh",
+  maxHeight: "4.5vh",
   objectFit: "contain",
+  flexShrink: 0,
   boxShadow: "0 0 0 1px rgba(23,19,26,0.12)",
 };
 
 const currencyCode: React.CSSProperties = {
   color: INK,
-  fontFamily: "'DM Mono', monospace",
-  fontSize: "clamp(17px, 1.5vw, 44px)",
-  fontWeight: 700,
+  fontFamily: "'Barlow Condensed', sans-serif",
+  fontSize: "clamp(20px, 2.2vw, 54px)",
+  fontWeight: 800,
   lineHeight: 1,
+  letterSpacing: "0.04em",
 };
 
 const currencyName: React.CSSProperties = {
-  marginTop: "0.45vh",
-  color: "#4a4450",
-  fontFamily: "'Inter', sans-serif",
-  fontSize: "clamp(9px, 0.68vw, 14px)",
+  marginTop: "0.3vh",
+  color: "#6b6070",
+  fontFamily: "'Barlow', sans-serif",
+  fontSize: "clamp(12px, 1.1vw, 22px)",
   fontWeight: 600,
 };
 
@@ -705,6 +700,7 @@ const promotionPanel: React.CSSProperties = {
   minHeight: 0,
   position: "relative",
   overflow: "hidden",
+  borderLeft: "3px solid #c0b8b0",
 };
 
 const promotionSlide: React.CSSProperties = {
@@ -768,7 +764,8 @@ const tickerItem: React.CSSProperties = {
   alignItems: "center",
   gap: "2.4vw",
   paddingLeft: "2.4vw",
-  fontSize: "clamp(10px, 0.78vw, 16px)",
-  fontWeight: 600,
-  letterSpacing: "0.03em",
+  fontFamily: "'Barlow Condensed', sans-serif",
+  fontSize: "clamp(16px, 1.8vw, 34px)",
+  fontWeight: 700,
+  letterSpacing: "0.05em",
 };

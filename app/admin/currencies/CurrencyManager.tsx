@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Image from 'next/image'
 
 interface CurrencyRow {
@@ -28,6 +28,8 @@ export default function CurrencyManager({ initialData }: Props) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [dragOver, setDragOver] = useState<number | null>(null)
+  const dragIndex = useRef<number | null>(null)
 
   function toggleEnabled(currency_id: string) {
     setRows((prev) =>
@@ -47,20 +49,34 @@ export default function CurrencyManager({ initialData }: Props) {
     setSaved(false)
   }
 
-  function moveUp(index: number) {
-    if (index === 0) return
-    const next = [...rows]
-    ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
-    setRows(next.map((r, i) => ({ ...r, display_order: i + 1 })))
-    setSaved(false)
+  function handleDragStart(index: number) {
+    dragIndex.current = index
   }
 
-  function moveDown(index: number) {
-    if (index === rows.length - 1) return
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault()
+    setDragOver(index)
+  }
+
+  function handleDrop(index: number) {
+    const from = dragIndex.current
+    if (from === null || from === index) {
+      setDragOver(null)
+      dragIndex.current = null
+      return
+    }
     const next = [...rows]
-    ;[next[index], next[index + 1]] = [next[index + 1], next[index]]
+    const [moved] = next.splice(from, 1)
+    next.splice(index, 0, moved)
     setRows(next.map((r, i) => ({ ...r, display_order: i + 1 })))
     setSaved(false)
+    setDragOver(null)
+    dragIndex.current = null
+  }
+
+  function handleDragEnd() {
+    setDragOver(null)
+    dragIndex.current = null
   }
 
   async function handleSave() {
@@ -117,7 +133,7 @@ export default function CurrencyManager({ initialData }: Props) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-800">
-              <th className="text-left px-4 py-3 text-zinc-500 font-medium w-12">Order</th>
+              <th className="text-left px-4 py-3 text-zinc-500 font-medium w-12"></th>
               <th className="text-left px-4 py-3 text-zinc-500 font-medium">Currency</th>
               <th className="text-left px-4 py-3 text-zinc-500 font-medium">Decimals on TV</th>
               <th className="text-left px-4 py-3 text-zinc-500 font-medium w-28">Show on TV</th>
@@ -127,33 +143,26 @@ export default function CurrencyManager({ initialData }: Props) {
             {rows.map((row, index) => (
               <tr
                 key={row.currency_id}
-                className={`border-b border-zinc-800/50 last:border-0 ${
-                  !row.is_enabled ? 'opacity-50' : ''
-                }`}
+                draggable
+                onDragStart={() => handleDragStart(index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={() => handleDrop(index)}
+                onDragEnd={handleDragEnd}
+                className={`border-b border-zinc-800/50 last:border-0 transition-colors ${
+                  dragOver === index ? 'bg-purple-950/40' : ''
+                } ${!row.is_enabled ? 'opacity-50' : ''}`}
               >
                 <td className="px-4 py-3">
-                  <div className="flex flex-col gap-0.5">
-                    <button
-                      onClick={() => moveUp(index)}
-                      disabled={index === 0}
-                      className="text-zinc-600 hover:text-zinc-300 disabled:opacity-20 disabled:cursor-not-allowed leading-none"
-                      title="Move up"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      onClick={() => moveDown(index)}
-                      disabled={index === rows.length - 1}
-                      className="text-zinc-600 hover:text-zinc-300 disabled:opacity-20 disabled:cursor-not-allowed leading-none"
-                      title="Move down"
-                    >
-                      ▼
-                    </button>
+                  <div
+                    className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-300 select-none text-lg leading-none"
+                    title="Drag to reorder"
+                  >
+                    ⠿
                   </div>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-6 h-4 overflow-hidden rounded-sm flex-shrink-0">
+                    <div className="w-6 h-4 overflow-hidden rounded-sm shrink-0">
                       <Image
                         src={row.currencies.flag_path}
                         alt={row.currencies.code}

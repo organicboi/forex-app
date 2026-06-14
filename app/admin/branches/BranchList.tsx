@@ -15,6 +15,8 @@ interface Branch {
   branch_token: string
   screens_online: number
   screens_total: number
+  configured_screens: number
+  templates_used: string[]
 }
 
 interface Props {
@@ -24,10 +26,10 @@ interface Props {
 
 const LAYOUT_LABELS: Record<string, string> = {
   'split-standard': 'Split (Standard)',
-  'rates-full': 'Rates Only',
-  'ads-full': 'Ads Only',
-  'portrait': 'Portrait',
-  'rates-wide': 'Rates Wide',
+  'rates-full':     'Rates Only',
+  'ads-full':       'Ads Only',
+  'portrait':       'Portrait',
+  'rates-wide':     'Rates Wide',
 }
 
 const LAYOUT_OPTIONS = Object.entries(LAYOUT_LABELS)
@@ -58,7 +60,10 @@ export default function BranchList({ initialBranches, maxBranches }: Props) {
         setCreateError(data.error ?? 'Failed to create branch')
         return
       }
-      setBranches((prev) => [...prev, { ...data, screens_online: 0, screens_total: 0 }])
+      setBranches((prev) => [
+        ...prev,
+        { ...data, screens_online: 0, screens_total: 0, configured_screens: 0, templates_used: [] },
+      ])
       setForm({ name: '', location_note: '', layout: 'split-standard' })
       setShowCreate(false)
       router.refresh()
@@ -88,7 +93,7 @@ export default function BranchList({ initialBranches, maxBranches }: Props) {
       {showCreate && (
         <form onSubmit={handleCreate} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-6">
           <h2 className="text-white font-medium text-sm mb-4">New Branch</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label className="block text-zinc-400 text-xs mb-1.5">Branch Name *</label>
               <input
@@ -123,9 +128,7 @@ export default function BranchList({ initialBranches, maxBranches }: Props) {
               </select>
             </div>
           </div>
-          {createError && (
-            <p className="text-red-400 text-sm mt-3">{createError}</p>
-          )}
+          {createError && <p className="text-red-400 text-sm mt-3">{createError}</p>}
           <div className="flex items-center gap-2 mt-4">
             <button
               type="submit"
@@ -157,7 +160,7 @@ export default function BranchList({ initialBranches, maxBranches }: Props) {
               <tr className="border-b border-zinc-800">
                 <th className="text-left px-4 py-3 text-zinc-500 font-medium">Branch</th>
                 <th className="text-left px-4 py-3 text-zinc-500 font-medium">Layout</th>
-                <th className="text-center px-4 py-3 text-zinc-500 font-medium">Screens</th>
+                <th className="text-left px-4 py-3 text-zinc-500 font-medium">Screens</th>
                 <th className="text-left px-4 py-3 text-zinc-500 font-medium">Status</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -170,15 +173,35 @@ export default function BranchList({ initialBranches, maxBranches }: Props) {
                     {branch.location_note && (
                       <div className="text-zinc-500 text-xs mt-0.5">{branch.location_note}</div>
                     )}
+                    {branch.templates_used.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {branch.templates_used.map((tpl) => (
+                          <span
+                            key={tpl}
+                            className="inline-block text-xs px-1.5 py-0.5 bg-purple-950/50 text-purple-400 rounded border border-purple-900/40"
+                          >
+                            {tpl}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-zinc-400">
+                  <td className="px-4 py-3 text-zinc-400 text-sm">
                     {LAYOUT_LABELS[branch.layout] ?? branch.layout}
                   </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={branch.screens_online > 0 ? 'text-green-400' : 'text-zinc-600'}>
-                      {branch.screens_online}
-                    </span>
-                    <span className="text-zinc-600"> / {branch.screens_total}</span>
+                  <td className="px-4 py-3">
+                    <div className="text-white text-sm">
+                      {branch.configured_screens}{' '}
+                      <span className="text-zinc-500">
+                        screen{branch.configured_screens !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    {branch.screens_online > 0 && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                        <span className="text-green-400 text-xs">{branch.screens_online} online</span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span

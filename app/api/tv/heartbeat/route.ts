@@ -12,20 +12,21 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient()
 
-  const { data: branch } = await supabase
-    .from('branches')
-    .select('id')
-    .eq('branch_token', token)
+  const { data: screen } = await supabase
+    .from('screens')
+    .select('id, branch_id')
+    .eq('screen_token', token)
     .eq('is_active', true)
     .single()
 
-  if (!branch) {
+  if (!screen) {
     return Response.json({ error: 'Invalid token' }, { status: 404 })
   }
 
   await supabase.from('screen_sessions').upsert(
     {
-      branch_id: branch.id,
+      branch_id: screen.branch_id,
+      screen_id: screen.id,
       session_key,
       last_seen_at: new Date().toISOString(),
       user_agent: request.headers.get('user-agent') ?? null,
