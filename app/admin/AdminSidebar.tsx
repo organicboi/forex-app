@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -21,29 +22,11 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    label: 'Currencies',
-    href: '/admin/currencies',
+    label: 'Display',
+    href: '/admin/display',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Templates',
-    href: '/admin/templates',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Ads',
-    href: '/admin/ads',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
       </svg>
     ),
   },
@@ -66,20 +49,14 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    label: 'Ticker',
-    href: '/admin/ticker',
+    label: 'Reports',
+    href: '/admin/reports',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
       </svg>
     ),
   },
-]
-
-const REPORT_ITEMS: NavItem[] = [
-  { label: 'Rate History', href: '/admin/reports/rates', icon: null },
-  { label: 'Screen Uptime', href: '/admin/reports/screens', icon: null },
-  { label: 'Storage', href: '/admin/reports/storage', icon: null },
 ]
 
 interface Props {
@@ -93,8 +70,23 @@ export default function AdminSidebar({ businessName, primaryColor, userEmail }: 
   const router = useRouter()
   const supabase = createClient()
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
-  const isReportsActive = pathname.startsWith('/admin/reports')
+  const isActive = (href: string) => {
+    if (href === '/admin/reports') {
+      return pathname === '/admin/reports' || pathname.startsWith('/admin/reports/')
+    }
+    if (href === '/admin/rates') {
+      return pathname === '/admin/rates' || pathname === '/admin/currencies'
+    }
+    if (href === '/admin/display') {
+      return (
+        pathname === '/admin/display' ||
+        pathname === '/admin/ads' ||
+        pathname === '/admin/ticker' ||
+        pathname === '/admin/templates'
+      )
+    }
+    return pathname === href || pathname.startsWith(href + '/')
+  }
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -102,12 +94,12 @@ export default function AdminSidebar({ businessName, primaryColor, userEmail }: 
   }
 
   return (
-    <div className="w-60 flex-shrink-0 flex flex-col bg-zinc-900 border-r border-zinc-800 h-screen">
+    <div className="w-60 shrink-0 flex flex-col bg-zinc-900 border-r border-zinc-800 h-screen">
       {/* Logo */}
       <div className="px-4 py-5 border-b border-zinc-800">
         <div className="flex items-center gap-2.5">
           <div
-            className="w-7 h-7 rounded-lg flex-shrink-0"
+            className="w-7 h-7 rounded-lg shrink-0"
             style={{ backgroundColor: primaryColor }}
           />
           <div className="min-w-0">
@@ -137,23 +129,6 @@ export default function AdminSidebar({ businessName, primaryColor, userEmail }: 
         ))}
 
         <div className="mt-3 mb-1 px-3">
-          <span className="text-zinc-700 text-xs font-medium uppercase tracking-wide">Reports</span>
-        </div>
-        {REPORT_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm mb-0.5 transition-colors ml-2 ${
-              isActive(item.href)
-                ? 'bg-purple-950/60 text-purple-300'
-                : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60'
-            }`}
-          >
-            {item.label}
-          </Link>
-        ))}
-
-        <div className="mt-3 mb-1 px-3">
           <span className="text-zinc-700 text-xs font-medium uppercase tracking-wide">Account</span>
         </div>
         <Link
@@ -164,7 +139,7 @@ export default function AdminSidebar({ businessName, primaryColor, userEmail }: 
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
           }`}
         >
-          <svg className="w-4 h-4 text-zinc-600" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+          <svg className={`w-4 h-4 ${isActive('/admin/plan') ? 'text-purple-400' : 'text-zinc-600'}`} fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
           </svg>
           Plan & Billing
@@ -185,6 +160,22 @@ export default function AdminSidebar({ businessName, primaryColor, userEmail }: 
           </svg>
           Sign Out
         </button>
+      </div>
+
+      {/* Powered by */}
+      <div className="px-4 pb-3 pt-2.5 border-t border-zinc-800/50">
+        <div className="flex items-center justify-center gap-2 opacity-40 hover:opacity-70 transition-opacity">
+          <span className="text-zinc-500 text-[9px] tracking-[0.18em] uppercase shrink-0">Powered by</span>
+          <div className="bg-white rounded px-1.5 py-0.5 shrink-0">
+            <Image
+              src="/brand/brandLogo.png"
+              alt="TechBiz Systems Services"
+              width={76}
+              height={19}
+              className="object-contain block"
+            />
+          </div>
+        </div>
       </div>
     </div>
   )

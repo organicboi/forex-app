@@ -179,20 +179,17 @@ export default function AdManager({ initialAds, branches, storageMb }: Props) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-white">Ads</h1>
-        <div className="flex items-center gap-3">
-          <select
-            value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
-            className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
-          >
-            <option value="">Customer-wide</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
-        </div>
+      <div className="flex justify-end mb-5">
+        <select
+          value={selectedBranch}
+          onChange={(e) => setSelectedBranch(e.target.value)}
+          className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
+        >
+          <option value="">Customer-wide</option>
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>{b.name}</option>
+          ))}
+        </select>
       </div>
 
       {/* Storage bar */}

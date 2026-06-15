@@ -1,11 +1,17 @@
 import { requireAdmin, getCustomerWithPlan } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { headers } from 'next/headers'
 import BranchList from './BranchList'
 
 export default async function BranchesPage() {
   const user = await requireAdmin()
   const customer = await getCustomerWithPlan(user.customer_id)
   const supabase = createAdminClient()
+
+  const headersList = await headers()
+  const host = headersList.get('host') ?? 'localhost:3000'
+  const proto = host.startsWith('localhost') ? 'http' : 'https'
+  const baseUrl = `${proto}://${host}`
 
   const [{ data: branches }, { data: statusRows }, { data: screensData }] = await Promise.all([
     supabase
@@ -54,6 +60,7 @@ export default async function BranchesPage() {
     <BranchList
       initialBranches={merged}
       maxBranches={customer?.plan.max_branches ?? 5}
+      baseUrl={baseUrl}
     />
   )
 }

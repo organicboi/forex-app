@@ -128,19 +128,16 @@ export default function TickerManager({ initialMessages }: Props) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-white">Ticker Messages</h1>
-        <div className="flex items-center gap-3">
-          {saved && <span className="text-green-400 text-sm">Order saved</span>}
-          {error && <span className="text-red-400 text-sm">{error}</span>}
-          <button
-            onClick={saveOrder}
-            disabled={saving}
-            className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
-          >
-            {saving ? 'Saving…' : 'Save Order'}
-          </button>
-        </div>
+      <div className="flex items-center justify-end gap-3 mb-6">
+        {saved && <span className="text-green-400 text-sm">Order saved</span>}
+        {error && <span className="text-red-400 text-sm">{error}</span>}
+        <button
+          onClick={saveOrder}
+          disabled={saving}
+          className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
+        >
+          {saving ? 'Saving…' : 'Save Order'}
+        </button>
       </div>
 
       {/* Add new message */}

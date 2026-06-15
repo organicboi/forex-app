@@ -401,6 +401,7 @@ export interface Database {
           screen_token: string
           template_id: string | null
           orientation: string
+          layout: string
           is_active: boolean
           created_at: string
         }
@@ -411,12 +412,14 @@ export interface Database {
           screen_token?: string
           template_id?: string | null
           orientation?: string
+          layout?: string
           is_active?: boolean
         }
         Update: Partial<{
           name: string
           template_id: string | null
           orientation: string
+          layout: string
           is_active: boolean
           screen_token: string
         }>

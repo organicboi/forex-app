@@ -42,7 +42,7 @@ interface AdItem {
 
 interface TVData {
   status: "ok" | "not_found" | "expired";
-  layout?: string;
+  screen_layout?: string;
   branch_name?: string;
   screen_orientation?: string;
   customer?: CustomerInfo;
@@ -280,13 +280,27 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   ];
   const tickerItems = ticker.length > 0 ? ticker : ["Exchange rates shown are for reference only"];
 
+  // ── Layout resolution ─────────────────────────────────────────────────────
+  // Portrait orientation always forces the stacked layout.
+  const screenLayout = tvData?.screen_layout ?? 'split-standard'
+  const effectiveLayout = isPortrait ? 'portrait' : screenLayout
+
+  const showRates = effectiveLayout !== 'ads-full'
+  const showAds   = effectiveLayout !== 'rates-full'
+
   // ── Portrait-aware styles ──────────────────────────────────────────────────
   // In portrait, vw units become tiny (narrow screen) — swap to vh/vmin throughout.
   // Rate numbers also need to be capped by column width so they never overflow.
 
-  const mainStyle: React.CSSProperties = isPortrait
-    ? { minHeight: 0, display: "grid", gridTemplateColumns: "1fr", gridTemplateRows: "1fr 35%" }
-    : { minHeight: 0, display: "grid", gridTemplateColumns: "64% 36%" };
+  const mainStyle: React.CSSProperties = (() => {
+    switch (effectiveLayout) {
+      case 'portrait':    return { minHeight: 0, display: "grid", gridTemplateColumns: "1fr", gridTemplateRows: "1fr 35%" }
+      case 'rates-wide':  return { minHeight: 0, display: "grid", gridTemplateColumns: "75% 25%" }
+      case 'rates-full':  return { minHeight: 0, display: "grid", gridTemplateColumns: "1fr" }
+      case 'ads-full':    return { minHeight: 0, display: "grid", gridTemplateColumns: "1fr" }
+      default:            return { minHeight: 0, display: "grid", gridTemplateColumns: "64% 36%" }
+    }
+  })()
 
   // Narrower currency column in portrait gives each rate column more room
   const colsGrid = isPortrait
@@ -303,9 +317,12 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   const currencyNameFontSize = isPortrait ? "clamp(9px, 1.1vh, 17px)" : "clamp(12px, 1.1vw, 22px)";
   const flagWidth = isPortrait ? "clamp(24px, 2.1vh, 44px)" : "clamp(36px, 2.8vw, 58px)";
 
-  const promotionPanelStyle: React.CSSProperties = isPortrait
-    ? { ...promotionPanel, borderLeft: "none", borderTop: "3px solid #c0b8b0" }
-    : promotionPanel;
+  const promotionPanelStyle: React.CSSProperties =
+    effectiveLayout === 'portrait'
+      ? { ...promotionPanel, borderLeft: "none", borderTop: "3px solid #c0b8b0" }
+      : effectiveLayout === 'ads-full'
+        ? { ...promotionPanel, borderLeft: "none" }
+        : promotionPanel
 
   // Per-element portrait overrides (p-prefixed = portrait-aware computed style)
   const pScreen: React.CSSProperties = {
@@ -423,7 +440,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
       {/* ── Main ── */}
       <main style={mainStyle}>
         {/* Rates */}
-        <section style={pRatesSection}>
+        {showRates && <section style={pRatesSection}>
           <div style={pTable}>
             {/* Column headers */}
             <div style={{ ...tableHeader, borderBottomColor: PURPLE, gridTemplateColumns: colsGrid }}>
@@ -494,10 +511,10 @@ export default function LiveDisplay({ token }: { token: string | null }) {
               )}
             </div>
           </div>
-        </section>
+        </section>}
 
         {/* Ads panel */}
-        <aside style={{ ...promotionPanelStyle, backgroundColor: "#211725" }}>
+        {showAds && <aside style={{ ...promotionPanelStyle, backgroundColor: "#211725" }}>
           {ads.length === 0 ? (
             <div
               style={{
@@ -534,7 +551,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
             );
           })()}
 
-        </aside>
+        </aside>}
       </main>
 
       {/* ── Ticker ── */}

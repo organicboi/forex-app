@@ -53,6 +53,13 @@ export async function PATCH(
     }
     updates.orientation = body.orientation
   }
+  if (body.layout !== undefined) {
+    const VALID_LAYOUTS = ['split-standard', 'rates-full', 'ads-full', 'portrait', 'rates-wide']
+    if (!VALID_LAYOUTS.includes(body.layout)) {
+      return Response.json({ error: 'Invalid layout' }, { status: 400 })
+    }
+    updates.layout = body.layout
+  }
 
   if (Object.keys(updates).length === 0) return Response.json({ error: 'Nothing to update' }, { status: 400 })
 
@@ -60,7 +67,7 @@ export async function PATCH(
     .from('screens')
     .update(updates)
     .eq('id', id)
-    .select('id, name, screen_token, template_id, orientation, is_active, display_templates(id, name)')
+    .select('id, name, screen_token, template_id, orientation, layout, is_active, display_templates(id, name)')
     .single()
 
   if (error) return Response.json({ error: error.message }, { status: 500 })

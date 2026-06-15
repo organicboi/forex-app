@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { useToast } from '@/app/admin/ToastContext'
 
 interface Branch {
   id: string
@@ -25,6 +26,7 @@ interface Screen {
   screen_token: string
   template_id: string | null
   orientation: string
+  layout: string
   is_active: boolean
   created_at: string
   display_templates: { id: string; name: string } | null
@@ -45,21 +47,21 @@ interface Props {
 }
 
 const LAYOUT_OPTIONS = [
-  { value: 'split-standard', label: 'Split (Standard) — 64% rates / 36% ads' },
-  { value: 'rates-full',     label: 'Rates Only — full screen' },
-  { value: 'ads-full',       label: 'Ads Only — full screen' },
-  { value: 'portrait',       label: 'Portrait — rates top / ads bottom' },
-  { value: 'rates-wide',     label: 'Rates Wide — 75% rates / 25% ads' },
+  { value: 'split-standard', label: 'Standard Split — 64% rates / 36% ads (default)' },
+  { value: 'rates-wide',     label: 'Wide Rates — 75% rates / 25% ads' },
+  { value: 'rates-full',     label: 'Rates Only — full screen, no ads' },
+  { value: 'ads-full',       label: 'Ads Only — full screen, no rates' },
+  { value: 'portrait',       label: 'Stacked — rates top / ads bottom' },
 ]
 
 export default function BranchDetail({ branch, baseUrl }: Props) {
   const router = useRouter()
+  const { toast } = useToast()
 
   // ── Branch settings ────────────────────────────────────────────────────────
   const [form, setForm] = useState({
     name: branch.name,
     location_note: branch.location_note ?? '',
-    layout: branch.layout,
     allow_user_rate_edit: branch.allow_user_rate_edit,
     is_active: branch.is_active,
   })
@@ -134,6 +136,7 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
       const data = await res.json()
       if (!res.ok) { setSaveError(data.error ?? 'Failed to save'); return }
       setSaved(true)
+      toast('Branch settings saved')
       router.refresh()
     } finally {
       setSaving(false)
@@ -172,6 +175,7 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
       setNewScreenName('')
       setNewScreenTemplate('')
       setAddingScreen(false)
+      toast('Screen added')
     } finally {
       setCreatingScreen(false)
     }
@@ -189,9 +193,11 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
       const res = await fetch(`/api/screens/${screenId}`, { method: 'DELETE' })
       if (res.ok) {
         setScreens((prev) => prev.filter((s) => s.id !== screenId))
+        toast('Screen deleted')
       } else {
         const data = await res.json()
         setScreenError(data.error ?? 'Failed to delete screen')
+        toast(data.error ?? 'Failed to delete screen', 'error')
       }
     } finally {
       setDeletingScreen(null)
@@ -208,6 +214,7 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
         setScreens((prev) =>
           prev.map((s) => (s.id === screenId ? { ...s, screen_token: data.screen_token } : s))
         )
+        toast('Token regenerated — old URL is now inactive', 'error')
       }
     } finally {
       setRegenning(null)
@@ -238,6 +245,7 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
     if (res.ok) {
       const data = await res.json()
       setScreens((prev) => prev.map((s) => (s.id === screenId ? { ...s, name: data.name } : s)))
+      toast('Screen renamed')
     }
   }
 
@@ -256,6 +264,7 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
             : s
         )
       )
+      toast('Template updated')
     }
   }
 
@@ -275,6 +284,20 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
     }
   }
 
+  async function handleScreenLayoutChange(screenId: string, layout: string) {
+    const res = await fetch(`/api/screens/${screenId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ layout }),
+    })
+    if (res.ok) {
+      setScreens((prev) => prev.map((s) => (s.id === screenId ? { ...s, layout } : s)))
+      toast('Layout updated')
+    } else {
+      toast('Failed to update layout', 'error')
+    }
+  }
+
   async function handleOrientationChange(screenId: string, orientation: 'landscape' | 'portrait') {
     const res = await fetch(`/api/screens/${screenId}`, {
       method: 'PATCH',
@@ -283,20 +306,21 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
     })
     if (res.ok) {
       setScreens((prev) => prev.map((s) => (s.id === screenId ? { ...s, orientation } : s)))
+      toast(`Orientation set to ${orientation}`)
     }
   }
 
   async function handleScreenAdToggle(screenId: string, adId: string) {
     const current = screenAdIds[screenId] ?? []
-    const updated = current.includes(adId)
-      ? current.filter((id) => id !== adId)
-      : [...current, adId]
+    const added = !current.includes(adId)
+    const updated = added ? [...current, adId] : current.filter((id) => id !== adId)
     setScreenAdIds((prev) => ({ ...prev, [screenId]: updated }))
-    await fetch(`/api/screens/${screenId}/ads`, {
+    const res = await fetch(`/api/screens/${screenId}/ads`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ad_ids: updated }),
     })
+    if (res.ok) toast(added ? 'Ad added to screen' : 'Ad removed from screen')
   }
 
   return (
@@ -335,19 +359,6 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
                 className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-zinc-400 text-xs mb-1.5">TV Layout</label>
-            <select
-              value={form.layout}
-              onChange={(e) => { setForm((f) => ({ ...f, layout: e.target.value })); setSaved(false) }}
-              className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
-            >
-              {LAYOUT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
           </div>
 
           <div className="flex items-center justify-between py-1">
@@ -394,10 +405,10 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
 
       {/* ── Screens ── */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-5">
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex items-start justify-between mb-5">
           <div>
-            <h2 className="text-white font-medium text-sm">Screens</h2>
-            <p className="text-zinc-500 text-xs mt-0.5">
+            <h2 className="text-white font-semibold text-sm">Screens</h2>
+            <p className="text-zinc-500 text-xs mt-1">
               Each screen is an independent TV display with its own URL, template, orientation, and ads
             </p>
           </div>
@@ -408,66 +419,80 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
                 setNewScreenName(`Screen ${screens.length + 1}`)
                 setNewScreenTemplate('')
               }}
-              className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+              className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium px-3.5 py-2 rounded-xl transition-colors whitespace-nowrap"
             >
-              + Add Screen
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Add Screen
             </button>
           )}
         </div>
 
-        {/* Add Screen inline form */}
+        {/* Add Screen form */}
         {addingScreen && (
           <form
             onSubmit={handleCreateScreen}
-            className="flex items-center gap-2 p-3 bg-zinc-800/50 rounded-lg mb-4 border border-zinc-700"
+            className="mb-5 p-4 bg-zinc-800/50 rounded-xl border border-zinc-700"
           >
-            <input
-              type="text"
-              value={newScreenName}
-              onChange={(e) => setNewScreenName(e.target.value)}
-              placeholder="Screen name"
-              autoFocus
-              className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500"
-            />
-            <select
-              value={newScreenTemplate}
-              onChange={(e) => setNewScreenTemplate(e.target.value)}
-              className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-purple-500 max-w-45"
-            >
-              <option value="">— Default Template —</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}{t.is_default ? ' (Default)' : ''}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              disabled={creatingScreen || !newScreenName.trim()}
-              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
-            >
-              {creatingScreen ? 'Adding…' : 'Add'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAddingScreen(false); setCreateScreenError('') }}
-              className="text-zinc-500 hover:text-zinc-300 text-xs px-2 py-1.5 transition-colors"
-            >
-              Cancel
-            </button>
+            <p className="text-zinc-300 text-xs font-semibold mb-3">New Screen</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-zinc-500 text-xs mb-1.5">Screen Name</label>
+                <input
+                  type="text"
+                  value={newScreenName}
+                  onChange={(e) => setNewScreenName(e.target.value)}
+                  placeholder="e.g. Main Window, Counter 1"
+                  autoFocus
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-zinc-500 text-xs mb-1.5">Template (optional)</label>
+                <select
+                  value={newScreenTemplate}
+                  onChange={(e) => setNewScreenTemplate(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-purple-500"
+                >
+                  <option value="">Default Template</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}{t.is_default ? ' (Default)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {createScreenError && <p className="text-red-400 text-xs mt-2">{createScreenError}</p>}
+            <div className="flex items-center gap-2 mt-4">
+              <button
+                type="submit"
+                disabled={creatingScreen || !newScreenName.trim()}
+                className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs font-medium px-4 py-2 rounded-xl transition-colors"
+              >
+                {creatingScreen ? 'Adding…' : 'Add Screen'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAddingScreen(false); setCreateScreenError('') }}
+                className="text-zinc-500 hover:text-zinc-300 text-xs px-3 py-2 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </form>
         )}
-        {createScreenError && <p className="text-red-400 text-xs mb-3">{createScreenError}</p>}
 
-        {/* Screen rows */}
+        {/* Screen cards */}
         {screensLoading ? (
-          <div className="text-zinc-600 text-sm py-6 text-center">Loading…</div>
+          <div className="text-zinc-600 text-sm py-8 text-center">Loading screens…</div>
         ) : screens.length === 0 ? (
-          <div className="text-zinc-600 text-sm py-8 text-center">
-            No screens configured.
+          <div className="text-zinc-600 text-sm py-10 text-center">
+            No screens configured yet. Add one above.
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-3">
             {screens.map((screen) => {
               const liveUrl = `${baseUrl}/live?token=${screen.screen_token}`
               const isDeleting = deletingScreen === screen.id
@@ -476,117 +501,124 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
               const isCopied = copied === screen.id
               const isExpanded = expandedScreenId === screen.id
               const isPortrait = screen.orientation === 'portrait'
+              const templateName = screen.display_templates?.name ?? 'Default Template'
 
               return (
                 <div
                   key={screen.id}
-                  className={`rounded-lg border transition-colors ${isExpanded ? 'border-purple-800/60 bg-purple-950/10' : 'border-zinc-800 bg-zinc-800/30 hover:border-zinc-700'}`}
+                  className={`rounded-xl border overflow-hidden transition-all ${
+                    isExpanded ? 'border-purple-700/50' : 'border-zinc-800'
+                  }`}
                 >
-                  {/* Main row */}
-                  <div className="flex items-center gap-2 px-3 py-2.5">
-                    {/* Screen icon */}
-                    <div className="shrink-0 text-zinc-600">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
-                      </svg>
+                  {/* Card header */}
+                  <div className={`px-4 pt-4 pb-3 ${isExpanded ? 'bg-purple-950/10' : 'bg-zinc-800/40'}`}>
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 text-zinc-500 shrink-0">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
+                        </svg>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        {editingNameId === screen.id ? (
+                          <input
+                            ref={editNameRef}
+                            type="text"
+                            value={editingNameValue}
+                            onChange={(e) => setEditingNameValue(e.target.value)}
+                            onBlur={() => commitEditName(screen.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') commitEditName(screen.id)
+                              if (e.key === 'Escape') setEditingNameId(null)
+                            }}
+                            className="w-full bg-zinc-800 border border-purple-500 text-white text-sm font-semibold rounded-lg px-2 py-0.5 focus:outline-none"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => startEditName(screen)}
+                            className="text-left text-white text-sm font-semibold hover:text-purple-300 transition-colors w-full truncate"
+                            title="Click to rename"
+                          >
+                            {screen.name}
+                          </button>
+                        )}
+                        <p className="text-zinc-500 text-xs mt-0.5 truncate">{templateName}</p>
+                      </div>
+
+                      <span
+                        className={`shrink-0 text-xs px-2.5 py-1 rounded-full border font-medium ${
+                          isPortrait
+                            ? 'bg-blue-950/30 border-blue-800/40 text-blue-400'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                        }`}
+                      >
+                        {isPortrait ? '↕ Portrait' : '↔ Landscape'}
+                      </span>
                     </div>
+                  </div>
 
-                    {/* Screen name — inline editable */}
-                    <div className="flex-1 min-w-0">
-                      {editingNameId === screen.id ? (
-                        <input
-                          ref={editNameRef}
-                          type="text"
-                          value={editingNameValue}
-                          onChange={(e) => setEditingNameValue(e.target.value)}
-                          onBlur={() => commitEditName(screen.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') commitEditName(screen.id)
-                            if (e.key === 'Escape') setEditingNameId(null)
-                          }}
-                          className="w-full bg-zinc-800 border border-purple-600 text-white text-sm rounded px-2 py-0.5 focus:outline-none"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => startEditName(screen)}
-                          className="text-left text-white text-sm font-medium hover:text-purple-300 transition-colors truncate w-full"
-                          title="Click to rename"
-                        >
-                          {screen.name}
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Orientation badge */}
-                    <span
-                      className={`shrink-0 text-xs px-1.5 py-0.5 rounded border font-mono ${
-                        isPortrait
-                          ? 'bg-blue-950/40 border-blue-800/40 text-blue-400'
-                          : 'bg-zinc-800 border-zinc-700 text-zinc-500'
-                      }`}
-                      title={isPortrait ? 'Portrait' : 'Landscape'}
-                    >
-                      {isPortrait ? '↕' : '↔'}
-                    </span>
-
-                    {/* Template selector */}
-                    <select
-                      value={screen.template_id ?? ''}
-                      onChange={(e) => handleTemplateChange(screen.id, e.target.value)}
-                      className="bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-purple-500 max-w-37.5 shrink-0"
-                    >
-                      <option value="">Default Template</option>
-                      {templates.map((t) => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
-                    </select>
-
-                    {/* Copy link */}
+                  {/* Action bar */}
+                  <div className={`flex items-center gap-1.5 px-4 pb-3.5 pt-0 ${isExpanded ? 'bg-purple-950/10' : 'bg-zinc-800/40'}`}>
                     <button
                       onClick={() => handleCopyLink(screen)}
                       title={liveUrl}
-                      className={`shrink-0 text-xs px-2.5 py-1 rounded-lg border transition-colors whitespace-nowrap ${
+                      className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                         isCopied
                           ? 'bg-green-900/30 border-green-700/50 text-green-400'
-                          : 'bg-zinc-800 border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100'
+                          : 'bg-zinc-800 border-zinc-700 hover:border-zinc-600 text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
-                      {isCopied ? '✓ Copied' : 'Copy Link'}
+                      {isCopied ? (
+                        <>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                          </svg>
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+                          </svg>
+                          Copy URL
+                        </>
+                      )}
                     </button>
 
-                    {/* Open live screen */}
                     <a
                       href={liveUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="shrink-0 text-xs px-2.5 py-1 bg-zinc-800 border border-zinc-700 hover:border-purple-600 text-zinc-300 hover:text-purple-300 rounded-lg transition-colors whitespace-nowrap"
-                      title="Open live screen in new tab"
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-zinc-800 border border-zinc-700 hover:border-purple-600/60 text-zinc-400 hover:text-purple-300 rounded-lg transition-colors"
                     >
-                      ↗ Open
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                      </svg>
+                      Open
                     </a>
 
-                    {/* Settings / expand */}
                     <button
                       onClick={() => toggleScreenSettings(screen.id)}
-                      title="Screen settings — orientation & ads"
-                      className={`shrink-0 p-1.5 rounded transition-colors ${
+                      className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                         isExpanded
-                          ? 'text-purple-400 bg-purple-900/30'
-                          : 'text-zinc-600 hover:text-zinc-300'
+                          ? 'bg-purple-600 border-purple-500 text-white'
+                          : 'bg-zinc-800 border-zinc-700 hover:border-zinc-600 text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
+                      Settings
                     </button>
 
-                    {/* Regen token */}
+                    <div className="flex-1" />
+
                     <button
                       onClick={() => handleRegenToken(screen.id)}
                       disabled={isRegenning}
                       title="Regenerate token — current URL will stop working"
-                      className="shrink-0 p-1.5 text-zinc-600 hover:text-amber-400 disabled:opacity-40 transition-colors rounded"
+                      className="p-1.5 text-zinc-600 hover:text-amber-400 disabled:opacity-40 transition-colors rounded-lg hover:bg-amber-400/8"
                     >
                       {isRegenning ? (
                         <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -600,15 +632,14 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
                       )}
                     </button>
 
-                    {/* Delete */}
                     <button
                       onClick={() => handleDeleteScreen(screen.id)}
                       disabled={isDeleting}
-                      title={isConfirmDelete ? 'Click again to confirm' : 'Delete screen'}
-                      className={`shrink-0 rounded transition-colors disabled:opacity-40 ${
+                      title={isConfirmDelete ? 'Click again to confirm delete' : 'Delete screen'}
+                      className={`rounded-lg transition-colors disabled:opacity-40 ${
                         isConfirmDelete
-                          ? 'px-2 py-1 bg-red-600/20 border border-red-700/50 text-red-400 text-xs'
-                          : 'p-1.5 text-zinc-600 hover:text-red-400'
+                          ? 'px-2.5 py-1.5 bg-red-600/20 border border-red-700/50 text-red-400 text-xs font-medium'
+                          : 'p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-400/8'
                       }`}
                     >
                       {isDeleting ? (
@@ -617,7 +648,7 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                         </svg>
                       ) : isConfirmDelete ? (
-                        'Confirm?'
+                        'Confirm delete'
                       ) : (
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
@@ -626,19 +657,19 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
                     </button>
                   </div>
 
-                  {/* ── Expanded settings panel ── */}
+                  {/* Expanded settings panel */}
                   {isExpanded && (
-                    <div className="border-t border-zinc-700/50 px-4 py-4 space-y-5">
+                    <div className="border-t border-purple-800/25 bg-zinc-900/60 px-5 py-5 space-y-6">
                       {/* Orientation */}
                       <div>
-                        <p className="text-zinc-400 text-xs font-medium mb-2">Display Orientation</p>
+                        <p className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-3">Orientation</p>
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleOrientationChange(screen.id, 'landscape')}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-medium transition-colors ${
                               !isPortrait
                                 ? 'bg-purple-600 border-purple-500 text-white'
-                                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                                : 'bg-zinc-800/80 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
                             }`}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -648,10 +679,10 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
                           </button>
                           <button
                             onClick={() => handleOrientationChange(screen.id, 'portrait')}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-medium transition-colors ${
                               isPortrait
                                 ? 'bg-purple-600 border-purple-500 text-white'
-                                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                                : 'bg-zinc-800/80 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
                             }`}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -660,19 +691,49 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
                             Portrait
                           </button>
                         </div>
-                        <p className="text-zinc-600 text-xs mt-1.5">
+                        <p className="text-zinc-600 text-xs mt-2">
                           {isPortrait
                             ? 'Portrait: rates on top, ads below. Use for vertically rotated TVs.'
                             : 'Landscape: rates left, ads right. Standard TV orientation.'}
                         </p>
                       </div>
 
+                      {/* Layout */}
+                      <div>
+                        <p className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-3">TV Layout</p>
+                        <select
+                          value={screen.layout ?? 'split-standard'}
+                          onChange={(e) => handleScreenLayoutChange(screen.id, e.target.value)}
+                          className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-purple-500 w-full"
+                        >
+                          {LAYOUT_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                        <p className="text-zinc-600 text-xs mt-2">Controls how rates and ads are arranged on this screen&apos;s display.</p>
+                      </div>
+
+                      {/* Template */}
+                      <div>
+                        <p className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-3">Template</p>
+                        <select
+                          value={screen.template_id ?? ''}
+                          onChange={(e) => handleTemplateChange(screen.id, e.target.value)}
+                          className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-purple-500 w-full max-w-xs"
+                        >
+                          <option value="">Default Template</option>
+                          {templates.map((t) => (
+                            <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' (Default)' : ''}</option>
+                          ))}
+                        </select>
+                      </div>
+
                       {/* Ads picker */}
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-zinc-400 text-xs font-medium">Ads on This Screen</p>
+                        <div className="flex items-center gap-2.5 mb-3">
+                          <p className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Ads on This Screen</p>
                           {(screenAdIds[screen.id]?.length ?? 0) > 0 && (
-                            <span className="text-xs text-purple-400">
+                            <span className="text-xs bg-purple-600/20 border border-purple-700/30 text-purple-400 px-2 py-0.5 rounded-full">
                               {screenAdIds[screen.id].length} selected
                             </span>
                           )}
@@ -682,25 +743,23 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
                         ) : allAds.length === 0 ? (
                           <div className="text-zinc-600 text-xs py-3">
                             No active ads uploaded yet.{' '}
-                            <a href="/admin/ads" className="text-purple-400 hover:text-purple-300">
-                              Go to Ads →
-                            </a>
+                            <a href="/admin/ads" className="text-purple-400 hover:text-purple-300">Go to Ads →</a>
                           </div>
                         ) : (
                           <>
                             <p className="text-zinc-600 text-xs mb-3">
-                              Select ads to show on this screen. When none are selected, branch/customer-wide ads are used.
+                              Select which ads play on this screen. When none are selected, branch-wide ads are used.
                             </p>
-                            <div className="grid grid-cols-2 gap-1.5">
+                            <div className="grid grid-cols-2 gap-2">
                               {allAds.map((ad) => {
                                 const isChecked = (screenAdIds[screen.id] ?? []).includes(ad.id)
                                 return (
                                   <label
                                     key={ad.id}
-                                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
                                       isChecked
                                         ? 'bg-purple-950/40 border-purple-700/50'
-                                        : 'bg-zinc-800/60 border-zinc-700 hover:border-zinc-600'
+                                        : 'bg-zinc-800/40 border-zinc-700/60 hover:border-zinc-600'
                                     }`}
                                   >
                                     <input
@@ -709,8 +768,7 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
                                       onChange={() => handleScreenAdToggle(screen.id, ad.id)}
                                       className="accent-purple-500 shrink-0"
                                     />
-                                    {/* Thumbnail */}
-                                    <div className="shrink-0 w-10 h-7 bg-zinc-700 rounded overflow-hidden flex items-center justify-center">
+                                    <div className="shrink-0 w-10 h-7 bg-zinc-700 rounded-lg overflow-hidden flex items-center justify-center">
                                       {ad.file_type === 'image' ? (
                                         // eslint-disable-next-line @next/next/no-img-element
                                         <img src={ad.file_url} alt="" className="w-full h-full object-cover" />
@@ -719,7 +777,7 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
                                       )}
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                      <div className="text-zinc-200 text-xs truncate leading-tight">
+                                      <div className="text-zinc-200 text-xs truncate font-medium">
                                         {ad.original_name ?? `${ad.file_type} ad`}
                                       </div>
                                       <div className="text-zinc-500 text-xs capitalize">
@@ -741,10 +799,10 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
           </div>
         )}
 
-        {screenError && <p className="text-red-400 text-xs mt-2">{screenError}</p>}
+        {screenError && <p className="text-red-400 text-xs mt-3">{screenError}</p>}
 
         {confirmDeleteScreen && (
-          <p className="text-zinc-500 text-xs mt-2 text-right">
+          <p className="text-zinc-500 text-xs mt-3 text-right">
             <button onClick={() => setConfirmDeleteScreen(null)} className="hover:text-zinc-300 transition-colors">
               Cancel delete
             </button>
