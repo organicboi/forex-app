@@ -83,6 +83,16 @@ function getOrCreateSessionKey(): string {
   }
 }
 
+function useWindowHeight() {
+  const [height, setHeight] = useState(typeof window !== "undefined" ? window.innerHeight : 1080);
+  useEffect(() => {
+    const handler = () => setHeight(window.innerHeight);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return height;
+}
+
 function useDateTime() {
   const [dt, setDt] = useState({ time: "", date: "" });
   useEffect(() => {
@@ -122,11 +132,11 @@ function FullScreen({ title, body }: { title: string; body: string }) {
         gap: "1.5vh",
       }}
     >
-      <div style={{ fontSize: "clamp(20px, 2vw, 40px)", fontWeight: 700, color: INK }}>
+      <div style={{ fontSize: "clamp(20px, 2vw, 80px)", fontWeight: 700, color: INK }}>
         {title}
       </div>
       {body && (
-        <div style={{ fontSize: "clamp(12px, 1vw, 20px)", color: "#756d78" }}>{body}</div>
+        <div style={{ fontSize: "clamp(12px, 1vw, 40px)", color: "#756d78" }}>{body}</div>
       )}
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@500;600;700&family=Roboto+Mono:wght@500;700&display=swap');`}</style>
     </div>
@@ -194,7 +204,10 @@ export default function LiveDisplay({ token }: { token: string | null }) {
 
   // ── Derived values needed by hooks (computed before any early return) ──────
   const isPortrait = (tvData?.screen_orientation ?? "landscape") === "portrait";
-  const RATES_PER_PAGE = isPortrait ? 8 : 7;
+  const windowHeight = useWindowHeight();
+  const RATES_PER_PAGE = isPortrait
+    ? Math.min(Math.max(8, Math.round(windowHeight / 240)), 16)
+    : Math.min(Math.max(7, Math.round(windowHeight / 180)), 16);
   const currencies = tvData?.currencies ?? [];
   const ads = tvData?.ads ?? [];
   const totalRatePages = Math.max(Math.ceil(currencies.length / RATES_PER_PAGE), 1);
@@ -309,13 +322,13 @@ export default function LiveDisplay({ token }: { token: string | null }) {
 
   // Font capped so numbers fit: portrait width ÷ (col fraction × 6 chars × char-width-ratio)
   const ratesCellFontSize = isPortrait
-    ? `clamp(14px, min(3.5vh, ${(30 / (1.1 + visibleColumns.length)).toFixed(1)}vw), 76px)`
-    : "clamp(28px, 3.2vw, 88px)";
+    ? `clamp(14px, min(3.5vh, ${(30 / (1.1 + visibleColumns.length)).toFixed(1)}vw), 140px)`
+    : "clamp(28px, 3.2vw, 140px)";
 
-  const headerCellFontSize = isPortrait ? "clamp(12px, 1.7vh, 34px)" : "clamp(18px, 1.9vw, 42px)";
-  const currencyCodeFontSize = isPortrait ? "clamp(15px, 2.3vh, 44px)" : "clamp(20px, 2.2vw, 54px)";
-  const currencyNameFontSize = isPortrait ? "clamp(9px, 1.1vh, 17px)" : "clamp(12px, 1.1vw, 22px)";
-  const flagWidth = isPortrait ? "clamp(24px, 2.1vh, 44px)" : "clamp(36px, 2.8vw, 58px)";
+  const headerCellFontSize = isPortrait ? "clamp(12px, 1.7vh, 68px)" : "clamp(18px, 1.9vw, 80px)";
+  const currencyCodeFontSize = isPortrait ? "clamp(15px, 2.3vh, 88px)" : "clamp(20px, 2.2vw, 100px)";
+  const currencyNameFontSize = isPortrait ? "clamp(9px, 1.1vh, 34px)" : "clamp(12px, 1.1vw, 44px)";
+  const flagWidth = isPortrait ? "clamp(24px, 2.1vh, 88px)" : "clamp(36px, 2.8vw, 110px)";
 
   const promotionPanelStyle: React.CSSProperties =
     effectiveLayout === 'portrait'
@@ -345,11 +358,11 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   };
   const pBrandName: React.CSSProperties = {
     ...brandName,
-    fontSize: isPortrait ? "clamp(13px, 2.8vh, 24px)" : "clamp(18px, 1.6vw, 32px)",
+    fontSize: isPortrait ? "clamp(13px, 2.8vh, 48px)" : "clamp(18px, 1.6vw, 64px)",
   };
   const pHeaderTitle: React.CSSProperties = {
     ...headerTitle,
-    fontSize: isPortrait ? "clamp(11px, 1.7vh, 20px)" : "clamp(20px, 1.8vw, 36px)",
+    fontSize: isPortrait ? "clamp(11px, 1.7vh, 40px)" : "clamp(20px, 1.8vw, 72px)",
     gap: isPortrait ? "0.8vh" : "0.65vw",
   };
   const pLiveDot: React.CSSProperties = {
@@ -362,7 +375,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   const pBranchInBrand: React.CSSProperties = {
     color: "#8c848e",
     fontFamily: "'Barlow Condensed', sans-serif",
-    fontSize: isPortrait ? "clamp(8px, 1.1vh, 14px)" : "clamp(11px, 0.95vw, 18px)",
+    fontSize: isPortrait ? "clamp(8px, 1.1vh, 28px)" : "clamp(11px, 0.95vw, 36px)",
     fontWeight: 700,
     letterSpacing: "0.14em",
     marginTop: "0.25vh",
@@ -374,11 +387,11 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   };
   const pClockTime: React.CSSProperties = {
     ...clockTime,
-    fontSize: isPortrait ? "clamp(16px, 2.8vh, 38px)" : "clamp(26px, 2.4vw, 50px)",
+    fontSize: isPortrait ? "clamp(16px, 2.8vh, 76px)" : "clamp(26px, 2.4vw, 100px)",
   };
   const pClockDate: React.CSSProperties = {
     ...clockDate,
-    fontSize: isPortrait ? "clamp(8px, 1.1vh, 14px)" : "clamp(12px, 1vw, 20px)",
+    fontSize: isPortrait ? "clamp(8px, 1.1vh, 28px)" : "clamp(12px, 1vw, 40px)",
   };
   const pRatesSection: React.CSSProperties = {
     ...ratesSection,
@@ -394,7 +407,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   };
   const pTickerItem: React.CSSProperties = {
     ...tickerItem,
-    fontSize: isPortrait ? "clamp(12px, 1.8vh, 24px)" : "clamp(16px, 1.8vw, 34px)",
+    fontSize: isPortrait ? "clamp(12px, 1.8vh, 48px)" : "clamp(16px, 1.8vw, 72px)",
     gap: isPortrait ? "5vw" : "2.4vw",
     paddingLeft: isPortrait ? "5vw" : "2.4vw",
   };
@@ -525,7 +538,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
                 justifyContent: "center",
               }}
             >
-              <div style={{ color: "rgba(255,255,255,0.15)", fontSize: "clamp(14px,1.2vw,24px)", fontWeight: 700, letterSpacing: "0.1em" }}>
+              <div style={{ color: "rgba(255,255,255,0.15)", fontSize: "clamp(14px,1.2vw,48px)", fontWeight: 700, letterSpacing: "0.1em" }}>
                 {displayName.toUpperCase()}
               </div>
             </div>
@@ -626,7 +639,7 @@ const brand: React.CSSProperties = {
 
 const brandName: React.CSSProperties = {
   fontFamily: "'Barlow Condensed', sans-serif",
-  fontSize: "clamp(18px, 1.6vw, 32px)",
+  fontSize: "clamp(18px, 1.6vw, 64px)",
   fontWeight: 800,
   letterSpacing: "0.06em",
 };
@@ -637,7 +650,7 @@ const headerTitle: React.CSSProperties = {
   gap: "0.65vw",
   color: INK,
   fontFamily: "'Barlow Condensed', sans-serif",
-  fontSize: "clamp(20px, 1.8vw, 36px)",
+  fontSize: "clamp(20px, 1.8vw, 72px)",
   fontWeight: 700,
   letterSpacing: "0.06em",
   whiteSpace: "nowrap",
@@ -664,7 +677,7 @@ const clock: React.CSSProperties = {
 
 const clockTime: React.CSSProperties = {
   fontFamily: "'Roboto Mono', monospace",
-  fontSize: "clamp(26px, 2.4vw, 50px)",
+  fontSize: "clamp(26px, 2.4vw, 100px)",
   fontWeight: 700,
   letterSpacing: "0.02em",
 };
@@ -673,7 +686,7 @@ const clockDate: React.CSSProperties = {
   marginTop: "0.7vh",
   color: "#756d78",
   fontFamily: "'Barlow Condensed', sans-serif",
-  fontSize: "clamp(12px, 1vw, 20px)",
+  fontSize: "clamp(12px, 1vw, 40px)",
   fontWeight: 600,
   textTransform: "uppercase",
   letterSpacing: "0.08em",
@@ -703,7 +716,7 @@ const tableHeader: React.CSSProperties = {
 const headerCell: React.CSSProperties = {
   color: "#756d78",
   fontFamily: "'Barlow Condensed', sans-serif",
-  fontSize: "clamp(18px, 1.9vw, 42px)",
+  fontSize: "clamp(18px, 1.9vw, 80px)",
   fontWeight: 700,
   letterSpacing: "0.13em",
   textAlign: "right",
@@ -747,14 +760,14 @@ const rateRow: React.CSSProperties = {
 const rateCell: React.CSSProperties = {
   color: INK,
   fontFamily: "'Barlow Condensed', sans-serif",
-  fontSize: "clamp(28px, 3.2vw, 88px)",
+  fontSize: "clamp(28px, 3.2vw, 140px)",
   fontWeight: 800,
   textAlign: "right",
   fontVariantNumeric: "tabular-nums",
 };
 
 const flagStyle: React.CSSProperties = {
-  width: "clamp(36px, 2.8vw, 58px)",
+  width: "clamp(36px, 2.8vw, 110px)",
   height: "auto",
   maxHeight: "4.5vh",
   objectFit: "contain",
@@ -765,7 +778,7 @@ const flagStyle: React.CSSProperties = {
 const currencyCode: React.CSSProperties = {
   color: INK,
   fontFamily: "'Barlow Condensed', sans-serif",
-  fontSize: "clamp(20px, 2.2vw, 54px)",
+  fontSize: "clamp(20px, 2.2vw, 100px)",
   fontWeight: 800,
   lineHeight: 1,
   letterSpacing: "0.04em",
@@ -775,7 +788,7 @@ const currencyName: React.CSSProperties = {
   marginTop: "0.3vh",
   color: "#6b6070",
   fontFamily: "'Barlow', sans-serif",
-  fontSize: "clamp(12px, 1.1vw, 22px)",
+  fontSize: "clamp(12px, 1.1vw, 44px)",
   fontWeight: 600,
 };
 
@@ -811,7 +824,7 @@ const promotionFooter: React.CSSProperties = {
   minHeight: "7vh",
   padding: "0 3vw",
   color: WHITE,
-  fontSize: "clamp(11px, 0.85vw, 18px)",
+  fontSize: "clamp(11px, 0.85vw, 36px)",
   fontWeight: 600,
   letterSpacing: "0.04em",
 };
@@ -848,7 +861,7 @@ const tickerItem: React.CSSProperties = {
   gap: "2.4vw",
   paddingLeft: "2.4vw",
   fontFamily: "'Barlow Condensed', sans-serif",
-  fontSize: "clamp(16px, 1.8vw, 34px)",
+  fontSize: "clamp(16px, 1.8vw, 72px)",
   fontWeight: 700,
   letterSpacing: "0.05em",
 };
@@ -868,7 +881,7 @@ const poweredByWrapper: React.CSSProperties = {
 const poweredByLabel: React.CSSProperties = {
   color: "rgba(255,255,255,0.45)",
   fontFamily: "'Barlow', sans-serif",
-  fontSize: "clamp(7px, 0.6vw, 11px)",
+  fontSize: "clamp(7px, 0.6vw, 24px)",
   fontWeight: 600,
   letterSpacing: "0.12em",
   textTransform: "uppercase",
@@ -881,7 +894,7 @@ const poweredByPill: React.CSSProperties = {
 };
 
 const poweredByLogo: React.CSSProperties = {
-  height: "clamp(22px, 3.2vh, 38px)",
+  height: "clamp(22px, 3.2vh, 76px)",
   width: "auto",
   objectFit: "contain",
   display: "block",
