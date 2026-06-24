@@ -384,7 +384,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   };
   const pHeader: React.CSSProperties = {
     ...header,
-    padding: isPortrait ? "0 1.6vmin" : "0 1.6vw",
+    padding: isPortrait ? "0 4.5vmin" : "0 1.6vw",
     gap: isPortrait ? "1.5vmin" : "2vw",
   };
   const pBrand: React.CSSProperties = {
@@ -423,7 +423,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   const pClock: React.CSSProperties = {
     ...clock,
     minWidth: isPortrait ? "auto" : "8.6vw",
-    paddingLeft: isPortrait ? "2.5vmin" : "1.4vw",
+    paddingLeft: isPortrait ? "3vmin" : "1.4vw",
   };
   const pClockTime: React.CSSProperties = {
     ...clockTime,
@@ -435,7 +435,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   };
   const pRatesSection: React.CSSProperties = {
     ...ratesSection,
-    padding: isPortrait ? "0.8vmax 1.6vmin 1vmax" : "1.5vh 1.6vw 1.6vh",
+    padding: isPortrait ? "0.8vmax 4.5vmin 1.4vmax" : "1.5vh 1.6vw 2.2vh",
   };
   const pTable: React.CSSProperties = {
     ...table,
@@ -736,7 +736,7 @@ const ratesSection: React.CSSProperties = {
   minHeight: 0,
   display: "flex",
   flexDirection: "column",
-  padding: "1.5vh 1.6vw 1.6vh",
+  padding: "1.5vh 1.6vw 2.2vh",
   backgroundColor: PAPER,
 };
 
