@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   // Resolve screen by screen_token
   const { data: screen } = await supabase
     .from('screens')
-    .select('id, branch_id, customer_id, template_id, orientation, layout, is_active')
+    .select('id, branch_id, customer_id, template_id, orientation, layout, rates_per_page, is_active')
     .eq('screen_token', token)
     .single()
 
@@ -123,5 +123,6 @@ export async function GET(request: NextRequest) {
     template_columns: templateColumns,
     screen_orientation: screen.orientation ?? 'landscape',
     screen_layout: screen.layout ?? 'split-standard',
+    rates_per_page: (screen as unknown as Record<string, unknown>).rates_per_page ?? null,
   })
 }

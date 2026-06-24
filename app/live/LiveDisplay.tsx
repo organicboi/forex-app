@@ -45,6 +45,7 @@ interface TVData {
   screen_layout?: string;
   branch_name?: string;
   screen_orientation?: string;
+  rates_per_page?: number | null;
   customer?: CustomerInfo;
   currencies?: CurrencyRate[];
   ads?: AdItem[];
@@ -83,14 +84,39 @@ function getOrCreateSessionKey(): string {
   }
 }
 
-function useWindowHeight() {
-  const [height, setHeight] = useState(typeof window !== "undefined" ? window.innerHeight : 1080);
+function useWindowSize() {
+  const [size, setSize] = useState({
+    width: typeof window !== "undefined" ? window.innerWidth : 1920,
+    height: typeof window !== "undefined" ? window.innerHeight : 1080,
+  });
   useEffect(() => {
-    const handler = () => setHeight(window.innerHeight);
+    const handler = () => setSize({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
-  return height;
+  return size;
+}
+
+function RotationWrapper({ needsRotation, children }: { needsRotation: boolean; children: React.ReactNode }) {
+  if (!needsRotation) return <>{children}</>;
+  return (
+    <div style={{ position: "fixed", inset: 0 }}>
+      <div
+        style={{
+          position: "absolute",
+          width: "100vh",
+          height: "100vw",
+          top: "calc(50vh - 50vw)",
+          left: "calc(50vw - 50vh)",
+          transform: "rotate(90deg)",
+          transformOrigin: "center center",
+          overflow: "hidden",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
 
 function useDateTime() {
@@ -204,10 +230,17 @@ export default function LiveDisplay({ token }: { token: string | null }) {
 
   // ── Derived values needed by hooks (computed before any early return) ──────
   const isPortrait = (tvData?.screen_orientation ?? "landscape") === "portrait";
-  const windowHeight = useWindowHeight();
-  const RATES_PER_PAGE = isPortrait
-    ? Math.min(Math.max(8, Math.round(windowHeight / 240)), 16)
+  const { width: windowWidth, height: windowHeight } = useWindowSize();
+  // When portrait layout is active on a physical landscape screen, rotate 90°
+  const needsRotation = isPortrait && windowWidth > windowHeight;
+  // Use the long dimension as the effective height for rate-per-page calculation
+  const portraitDisplayHeight = needsRotation ? windowWidth : windowHeight;
+  const autoRatesPerPage = isPortrait
+    ? Math.min(Math.max(8, Math.round(portraitDisplayHeight / 240)), 16)
     : Math.min(Math.max(7, Math.round(windowHeight / 180)), 16);
+  const RATES_PER_PAGE = tvData?.rates_per_page ?? autoRatesPerPage;
+  // Scale row-level font sizes down when showing more items than auto-detected baseline
+  const densityScale = autoRatesPerPage / RATES_PER_PAGE;
   const currencies = tvData?.currencies ?? [];
   const ads = tvData?.ads ?? [];
   const totalRatePages = Math.max(Math.ceil(currencies.length / RATES_PER_PAGE), 1);
@@ -287,10 +320,6 @@ export default function LiveDisplay({ token }: { token: string | null }) {
       ];
 
   const visibleRates = currencies.slice(ratePage * RATES_PER_PAGE, (ratePage + 1) * RATES_PER_PAGE);
-  const rateSlots: Array<CurrencyRate | null> = [
-    ...visibleRates,
-    ...Array<null>(RATES_PER_PAGE - visibleRates.length).fill(null),
-  ];
   const tickerItems = ticker.length > 0 ? ticker : ["Exchange rates shown are for reference only"];
 
   // ── Layout resolution ─────────────────────────────────────────────────────
@@ -320,15 +349,24 @@ export default function LiveDisplay({ token }: { token: string | null }) {
     ? `1.1fr repeat(${visibleColumns.length}, 1fr)`
     : `1.3fr repeat(${visibleColumns.length}, 1fr)`;
 
-  // Font capped so numbers fit: portrait width ÷ (col fraction × 6 chars × char-width-ratio)
+  // Scale row-level fonts by densityScale so more rows = proportionally smaller text.
+  // Header row stays fixed; only row content (rates, currency, flag) scales.
+  // vmax = long axis, vmin = short axis — correct for both native portrait and rotated landscape
+  const ds = densityScale;
   const ratesCellFontSize = isPortrait
-    ? `clamp(14px, min(3.5vh, ${(30 / (1.1 + visibleColumns.length)).toFixed(1)}vw), 140px)`
-    : "clamp(28px, 3.2vw, 140px)";
+    ? `clamp(10px, min(${(3.5 * ds).toFixed(2)}vmax, ${(30 * ds / (1.1 + visibleColumns.length)).toFixed(2)}vmin), ${Math.round(140 * ds)}px)`
+    : `clamp(14px, ${(3.2 * ds).toFixed(2)}vw, ${Math.round(140 * ds)}px)`;
 
-  const headerCellFontSize = isPortrait ? "clamp(12px, 1.7vh, 68px)" : "clamp(18px, 1.9vw, 80px)";
-  const currencyCodeFontSize = isPortrait ? "clamp(15px, 2.3vh, 88px)" : "clamp(20px, 2.2vw, 100px)";
-  const currencyNameFontSize = isPortrait ? "clamp(9px, 1.1vh, 34px)" : "clamp(12px, 1.1vw, 44px)";
-  const flagWidth = isPortrait ? "clamp(24px, 2.1vh, 88px)" : "clamp(36px, 2.8vw, 110px)";
+  const headerCellFontSize = isPortrait ? "clamp(12px, 1.7vmax, 68px)" : "clamp(18px, 1.9vw, 80px)";
+  const currencyCodeFontSize = isPortrait
+    ? `clamp(12px, ${(2.3 * ds).toFixed(2)}vmax, ${Math.round(88 * ds)}px)`
+    : `clamp(14px, ${(2.2 * ds).toFixed(2)}vw, ${Math.round(100 * ds)}px)`;
+  const currencyNameFontSize = isPortrait
+    ? `clamp(7px, ${(1.1 * ds).toFixed(2)}vmax, ${Math.round(34 * ds)}px)`
+    : `clamp(9px, ${(1.1 * ds).toFixed(2)}vw, ${Math.round(44 * ds)}px)`;
+  const flagWidth = isPortrait
+    ? `clamp(18px, ${(2.1 * ds).toFixed(2)}vmax, ${Math.round(88 * ds)}px)`
+    : `clamp(24px, ${(2.8 * ds).toFixed(2)}vw, ${Math.round(110 * ds)}px)`;
 
   const promotionPanelStyle: React.CSSProperties =
     effectiveLayout === 'portrait'
@@ -340,80 +378,83 @@ export default function LiveDisplay({ token }: { token: string | null }) {
   // Per-element portrait overrides (p-prefixed = portrait-aware computed style)
   const pScreen: React.CSSProperties = {
     ...screenStyle,
-    gridTemplateRows: isPortrait ? "8vh 1fr 5.5vh" : "10vh 1fr 8vh",
+    gridTemplateRows: isPortrait ? "8vmax 1fr 5.5vmax" : "10vh 1fr 8vh",
+    // When rotated, let the rotation wrapper control outer dimensions
+    ...(needsRotation && { width: "100%", height: "100%" }),
   };
   const pHeader: React.CSSProperties = {
     ...header,
-    padding: isPortrait ? "0 2vw" : "0 2.2vw",
-    gap: isPortrait ? "1.5vw" : "2vw",
+    padding: isPortrait ? "0 1.6vmin" : "0 1.6vw",
+    gap: isPortrait ? "1.5vmin" : "2vw",
   };
   const pBrand: React.CSSProperties = {
     ...brand,
-    gap: isPortrait ? "1.5vw" : "0.9vw",
+    gap: isPortrait ? "1.5vmin" : "0.9vw",
   };
   const pLogoStyle: React.CSSProperties = {
-    height: isPortrait ? "4vh" : "6vh",
-    maxWidth: isPortrait ? "18vw" : "10vw",
+    height: isPortrait ? "4vmax" : "6vh",
+    maxWidth: isPortrait ? "18vmin" : "10vw",
     objectFit: "contain",
   };
   const pBrandName: React.CSSProperties = {
     ...brandName,
-    fontSize: isPortrait ? "clamp(13px, 2.8vh, 48px)" : "clamp(18px, 1.6vw, 64px)",
+    fontSize: isPortrait ? "clamp(13px, 2.8vmax, 48px)" : "clamp(18px, 1.6vw, 64px)",
   };
   const pHeaderTitle: React.CSSProperties = {
     ...headerTitle,
-    fontSize: isPortrait ? "clamp(11px, 1.7vh, 40px)" : "clamp(20px, 1.8vw, 72px)",
-    gap: isPortrait ? "0.8vh" : "0.65vw",
+    fontSize: isPortrait ? "clamp(11px, 1.7vmax, 40px)" : "clamp(20px, 1.8vw, 72px)",
+    gap: isPortrait ? "0.8vmax" : "0.65vw",
   };
   const pLiveDot: React.CSSProperties = {
     ...liveDot,
-    width: isPortrait ? "1vh" : "0.8vw",
-    height: isPortrait ? "1vh" : "0.8vw",
+    width: isPortrait ? "1vmax" : "0.8vw",
+    height: isPortrait ? "1vmax" : "0.8vw",
     minWidth: isPortrait ? "9px" : "12px",
     minHeight: isPortrait ? "9px" : "12px",
   };
   const pBranchInBrand: React.CSSProperties = {
     color: "#8c848e",
     fontFamily: "'Barlow Condensed', sans-serif",
-    fontSize: isPortrait ? "clamp(8px, 1.1vh, 28px)" : "clamp(11px, 0.95vw, 36px)",
+    fontSize: isPortrait ? "clamp(8px, 1.1vmax, 28px)" : "clamp(11px, 0.95vw, 36px)",
     fontWeight: 700,
     letterSpacing: "0.14em",
-    marginTop: "0.25vh",
+    marginTop: "0.25vmax",
   };
   const pClock: React.CSSProperties = {
     ...clock,
     minWidth: isPortrait ? "auto" : "8.6vw",
-    paddingLeft: isPortrait ? "2.5vw" : "1.4vw",
+    paddingLeft: isPortrait ? "2.5vmin" : "1.4vw",
   };
   const pClockTime: React.CSSProperties = {
     ...clockTime,
-    fontSize: isPortrait ? "clamp(16px, 2.8vh, 76px)" : "clamp(26px, 2.4vw, 100px)",
+    fontSize: isPortrait ? "clamp(16px, 2.8vmax, 76px)" : "clamp(26px, 2.4vw, 100px)",
   };
   const pClockDate: React.CSSProperties = {
     ...clockDate,
-    fontSize: isPortrait ? "clamp(8px, 1.1vh, 28px)" : "clamp(12px, 1vw, 40px)",
+    fontSize: isPortrait ? "clamp(8px, 1.1vmax, 28px)" : "clamp(12px, 1vw, 40px)",
   };
   const pRatesSection: React.CSSProperties = {
     ...ratesSection,
-    padding: isPortrait ? "0.8vh 2vw 1vh" : "1.5vh 2.2vw 1.6vh",
+    padding: isPortrait ? "0.8vmax 1.6vmin 1vmax" : "1.5vh 1.6vw 1.6vh",
   };
   const pTable: React.CSSProperties = {
     ...table,
-    gridTemplateRows: isPortrait ? "5.5vh 0.6vh 1fr" : "7vh 0.8vh 1fr",
+    gridTemplateRows: isPortrait ? "5.5vmax 0.6vmax 1fr" : "7vh 0.8vh 1fr",
   };
   const pCurrencyCol: React.CSSProperties = {
     ...currencyColumn,
-    gap: isPortrait ? "1.5vw" : "0.7vw",
+    gap: isPortrait ? "1.5vmin" : "0.7vw",
   };
   const pTickerItem: React.CSSProperties = {
     ...tickerItem,
-    fontSize: isPortrait ? "clamp(12px, 1.8vh, 48px)" : "clamp(16px, 1.8vw, 72px)",
-    gap: isPortrait ? "5vw" : "2.4vw",
-    paddingLeft: isPortrait ? "5vw" : "2.4vw",
+    fontSize: isPortrait ? "clamp(12px, 1.8vmax, 48px)" : "clamp(16px, 1.8vw, 72px)",
+    gap: isPortrait ? "5vmin" : "2.4vw",
+    paddingLeft: isPortrait ? "5vmin" : "2.4vw",
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
+    <RotationWrapper needsRotation={needsRotation}>
     <div style={pScreen}>
       {/* ── Header ── */}
       <header style={{ ...pHeader, borderBottomColor: ORANGE }}>
@@ -474,13 +515,12 @@ export default function LiveDisplay({ token }: { token: string | null }) {
             <div
               style={{
                 ...tableBody,
-                gridTemplateRows: `repeat(${RATES_PER_PAGE}, minmax(0, 1fr))`,
+                gridTemplateRows: `repeat(${visibleRates.length || 1}, minmax(0, 1fr))`,
                 opacity: ratesChanging ? 0 : 1,
                 transform: ratesChanging ? "translateY(1vh)" : "translateY(0)",
               }}
             >
-              {rateSlots.map((rate, index) =>
-                rate ? (
+              {visibleRates.map((rate, index) => (
                   <div
                     key={rate.code}
                     style={{
@@ -520,8 +560,7 @@ export default function LiveDisplay({ token }: { token: string | null }) {
                       );
                     })}
                   </div>
-                ) : null,
-              )}
+              ))}
             </div>
           </div>
         </section>}
@@ -599,12 +638,13 @@ export default function LiveDisplay({ token }: { token: string | null }) {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@500;600;700&family=Roboto+Mono:wght@500;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { width: 100%; height: 100%; overflow: hidden; background: ${PAPER}; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: ${PAPER}; display: block !important; min-height: unset !important; flex-direction: unset !important; }
         @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         @keyframes rateProgress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
         @keyframes livePulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.75); } }
       `}</style>
     </div>
+    </RotationWrapper>
   );
 }
 
@@ -626,7 +666,7 @@ const header: React.CSSProperties = {
   gridTemplateColumns: "1fr auto 1fr",
   alignItems: "center",
   gap: "2vw",
-  padding: "0 2.2vw",
+  padding: "0 1.6vw",
   backgroundColor: WHITE,
   borderBottom: `0.6vh solid`,
 };
@@ -696,7 +736,7 @@ const ratesSection: React.CSSProperties = {
   minHeight: 0,
   display: "flex",
   flexDirection: "column",
-  padding: "1.5vh 2.2vw 1.6vh",
+  padding: "1.5vh 1.6vw 1.6vh",
   backgroundColor: PAPER,
 };
 
@@ -837,7 +877,6 @@ const promotionFooterText: React.CSSProperties = {
 const footer: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  paddingLeft: "2.4vw",
   backgroundColor: INK,
   color: WHITE,
   overflow: "hidden",

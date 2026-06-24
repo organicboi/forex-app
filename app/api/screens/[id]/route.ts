@@ -60,6 +60,13 @@ export async function PATCH(
     }
     updates.layout = body.layout
   }
+  if ('rates_per_page' in body) {
+    const rpp = body.rates_per_page
+    if (rpp !== null && (typeof rpp !== 'number' || !Number.isInteger(rpp) || rpp < 3 || rpp > 30)) {
+      return Response.json({ error: 'rates_per_page must be an integer between 3 and 30, or null' }, { status: 400 })
+    }
+    ;(updates as Record<string, unknown>).rates_per_page = rpp ?? null
+  }
 
   if (Object.keys(updates).length === 0) return Response.json({ error: 'Nothing to update' }, { status: 400 })
 
@@ -67,7 +74,7 @@ export async function PATCH(
     .from('screens')
     .update(updates)
     .eq('id', id)
-    .select('id, name, screen_token, template_id, orientation, layout, is_active, display_templates(id, name)')
+    .select('id, name, screen_token, template_id, orientation, layout, rates_per_page, is_active, display_templates(id, name)')
     .single()
 
   if (error) return Response.json({ error: error.message }, { status: 500 })

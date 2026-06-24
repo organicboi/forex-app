@@ -36,7 +36,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from('screens')
-    .select('id, name, screen_token, template_id, orientation, layout, is_active, created_at, display_templates(id, name)')
+    .select('id, name, screen_token, template_id, orientation, layout, rates_per_page, is_active, created_at, display_templates(id, name)')
     .eq('branch_id', branch_id)
     .order('created_at', { ascending: true })
 
@@ -77,7 +77,7 @@ export async function POST(
       name: name.trim(),
       template_id: template_id || null,
     })
-    .select('id, name, screen_token, template_id, orientation, layout, is_active, created_at, display_templates(id, name)')
+    .select('id, name, screen_token, template_id, orientation, layout, rates_per_page, is_active, created_at, display_templates(id, name)')
     .single()
 
   if (error) return Response.json({ error: error.message }, { status: 500 })

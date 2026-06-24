@@ -27,6 +27,7 @@ interface Screen {
   template_id: string | null
   orientation: string
   layout: string
+  rates_per_page: number | null
   is_active: boolean
   created_at: string
   display_templates: { id: string; name: string } | null
@@ -95,6 +96,9 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
   const [expandedScreenId, setExpandedScreenId] = useState<string | null>(null)
   const [screenAdIds, setScreenAdIds] = useState<Record<string, string[]>>({})
   const [loadingScreenAds, setLoadingScreenAds] = useState<string | null>(null)
+
+  // ── Currencies-per-page draft values (uncommitted input) ──────────────────
+  const [rppDraft, setRppDraft] = useState<Record<string, string>>({})
 
   // ── Branch delete ──────────────────────────────────────────────────────────
   const [deleting, setDeleting] = useState(false)
@@ -307,6 +311,20 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
     if (res.ok) {
       setScreens((prev) => prev.map((s) => (s.id === screenId ? { ...s, orientation } : s)))
       toast(`Orientation set to ${orientation}`)
+    }
+  }
+
+  async function handleRatesPerPageChange(screenId: string, value: number | null) {
+    const res = await fetch(`/api/screens/${screenId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rates_per_page: value }),
+    })
+    if (res.ok) {
+      setScreens((prev) => prev.map((s) => (s.id === screenId ? { ...s, rates_per_page: value } : s)))
+      toast(value === null ? 'Reverted to auto currencies per page' : `Showing ${value} currencies per page`)
+    } else {
+      toast('Failed to update currencies per page', 'error')
     }
   }
 
@@ -711,6 +729,55 @@ export default function BranchDetail({ branch, baseUrl }: Props) {
                           ))}
                         </select>
                         <p className="text-zinc-600 text-xs mt-2">Controls how rates and ads are arranged on this screen&apos;s display.</p>
+                      </div>
+
+                      {/* Currencies Per Page */}
+                      <div>
+                        <p className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-3">Currencies Per Page</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {[null, 5, 7, 8, 10, 12, 15, 20, 25].map((preset) => {
+                            const active = (screen.rates_per_page ?? null) === preset
+                            return (
+                              <button
+                                key={preset ?? 'auto'}
+                                onClick={() => handleRatesPerPageChange(screen.id, preset)}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                                  active
+                                    ? 'bg-purple-600 border-purple-500 text-white'
+                                    : 'bg-zinc-800/80 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                                }`}
+                              >
+                                {preset === null ? 'Auto' : preset}
+                              </button>
+                            )
+                          })}
+                          <input
+                            type="number"
+                            min={3}
+                            max={30}
+                            placeholder="Custom"
+                            value={rppDraft[screen.id] ?? ''}
+                            onChange={(e) => setRppDraft((d) => ({ ...d, [screen.id]: e.target.value }))}
+                            onBlur={() => {
+                              const raw = rppDraft[screen.id]
+                              if (!raw) return
+                              const n = parseInt(raw, 10)
+                              if (!isNaN(n) && n >= 3 && n <= 30) {
+                                handleRatesPerPageChange(screen.id, n)
+                              }
+                              setRppDraft((d) => { const copy = { ...d }; delete copy[screen.id]; return copy })
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                            }}
+                            className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-purple-500 placeholder:text-zinc-600"
+                          />
+                        </div>
+                        <p className="text-zinc-600 text-xs mt-2">
+                          {screen.rates_per_page
+                            ? `Showing ${screen.rates_per_page} currencies per page. Font sizes scale automatically to fit.`
+                            : 'Auto-detects based on screen height. Type a custom value or press Enter to apply.'}
+                        </p>
                       </div>
 
                       {/* Template */}
