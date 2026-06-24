@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
       currency_id: cur.id,
       is_enabled: true,
       display_order: idx + 1,
+      decimal_places: null as number | null,
     }))
 
     await supabase
