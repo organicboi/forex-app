@@ -18,6 +18,17 @@ interface AdRow {
   is_active: boolean
 }
 
+interface ScreenRow {
+  id: string
+  branch_id: string
+  customer_id: string
+  template_id: string | null
+  orientation: string | null
+  layout: string | null
+  rates_per_page: number | null
+  is_active: boolean
+}
+
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
   if (!token) return Response.json({ error: 'Missing token' }, { status: 400 })
@@ -25,11 +36,11 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient()
 
   // Resolve screen by screen_token
-  const { data: screen } = await supabase
+  const { data: screen } = await (supabase
     .from('screens')
     .select('id, branch_id, customer_id, template_id, orientation, layout, rates_per_page, is_active')
     .eq('screen_token', token)
-    .single()
+    .single() as unknown as Promise<{ data: ScreenRow | null; error: unknown }>)
 
   if (!screen || !screen.is_active) {
     return Response.json({ status: 'not_found' })
@@ -123,6 +134,6 @@ export async function GET(request: NextRequest) {
     template_columns: templateColumns,
     screen_orientation: screen.orientation ?? 'landscape',
     screen_layout: screen.layout ?? 'split-standard',
-    rates_per_page: (screen as unknown as Record<string, unknown>).rates_per_page ?? null,
+    rates_per_page: screen.rates_per_page ?? null,
   })
 }
