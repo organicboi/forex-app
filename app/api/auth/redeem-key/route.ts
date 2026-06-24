@@ -66,5 +66,43 @@ export async function POST(request: NextRequest) {
     })
     .eq('id', licenseKey.id)
 
+  // ── Auto-seed all currencies for this new customer ──────────────
+  // Fetch every currency from the master list, ordered by sort_order
+  const { data: allCurrencies } = await supabase
+    .from('currencies')
+    .select('id, sort_order')
+    .order('sort_order', { ascending: true })
+
+  if (allCurrencies && allCurrencies.length > 0) {
+    const customerId = licenseKey.customer_id
+
+    // Insert into customer_currencies (all enabled by default)
+    const ccRows = allCurrencies.map((cur, idx) => ({
+      customer_id: customerId,
+      currency_id: cur.id,
+      is_enabled: true,
+      display_order: idx + 1,
+    }))
+
+    await supabase
+      .from('customer_currencies')
+      .upsert(ccRows, { onConflict: 'customer_id,currency_id' })
+
+    // Insert zero-value rate rows so the TV dashboard renders immediately
+    const rateRows = allCurrencies.map((cur) => ({
+      customer_id: customerId,
+      currency_id: cur.id,
+      buy: 0,
+      sell: 0,
+      transfer: 0,
+      mode: 'manual' as const,
+    }))
+
+    await supabase
+      .from('rates')
+      .upsert(rateRows, { onConflict: 'customer_id,currency_id' })
+  }
+  // ────────────────────────────────────────────────────────────────
+
   return Response.json({ ok: true })
 }
