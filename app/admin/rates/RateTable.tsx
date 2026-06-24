@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
 interface RateRow {
@@ -33,6 +34,8 @@ interface Props {
 }
 
 export default function RateTable({ initialData, baseCurrency }: Props) {
+  const router = useRouter()
+  const [data, setData] = useState(initialData)
   const [edits, setEdits] = useState<Record<string, EditableRate>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -50,7 +53,7 @@ export default function RateTable({ initialData, baseCurrency }: Props) {
   }
 
   function setField(currency_id: string, field: 'buy' | 'sell' | 'transfer', value: string) {
-    const row = initialData.find((r) => r.currency_id === currency_id)
+    const row = data.find((r) => r.currency_id === currency_id)
     if (!row) return
     const current = getRate(row)
     setEdits((prev) => ({
@@ -68,7 +71,7 @@ export default function RateTable({ initialData, baseCurrency }: Props) {
     setSaving(true)
     setError('')
     try {
-      const payload = initialData.map((row) => {
+      const payload = data.map((row) => {
         const rate = getRate(row)
         return {
           currency_id: row.currency_id,
@@ -90,9 +93,28 @@ export default function RateTable({ initialData, baseCurrency }: Props) {
         return
       }
 
+      // Commit edited values into local data so inputs don't revert after edits clear
+      setData((prev) =>
+        prev.map((row) => {
+          const e = edits[row.currency_id]
+          if (!e) return row
+          return {
+            ...row,
+            rates: [
+              {
+                ...(row.rates?.[0] ?? { mode: 'manual', updated_at: null }),
+                buy: Number(e.buy) || 0,
+                sell: Number(e.sell) || 0,
+                transfer: Number(e.transfer) || 0,
+              },
+            ],
+          }
+        })
+      )
       setEdits({})
       setSaved(true)
       setLastSaved(new Date())
+      router.refresh()
     } finally {
       setSaving(false)
     }
@@ -139,7 +161,7 @@ export default function RateTable({ initialData, baseCurrency }: Props) {
             </tr>
           </thead>
           <tbody>
-            {initialData.map((row) => {
+            {data.map((row) => {
               const rate = getRate(row)
               const dec = decimals(row)
               const isEdited = !!edits[row.currency_id]

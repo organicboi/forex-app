@@ -336,11 +336,11 @@ export default function LiveDisplay({ token }: { token: string | null }) {
 
   const mainStyle: React.CSSProperties = (() => {
     switch (effectiveLayout) {
-      case 'portrait':    return { minHeight: 0, display: "grid", gridTemplateColumns: "1fr", gridTemplateRows: "1fr 35%" }
-      case 'rates-wide':  return { minHeight: 0, display: "grid", gridTemplateColumns: "75% 25%" }
-      case 'rates-full':  return { minHeight: 0, display: "grid", gridTemplateColumns: "1fr" }
-      case 'ads-full':    return { minHeight: 0, display: "grid", gridTemplateColumns: "1fr" }
-      default:            return { minHeight: 0, display: "grid", gridTemplateColumns: "64% 36%" }
+      case 'portrait':    return { minHeight: 0, display: "grid", gridTemplateColumns: "1fr",      gridTemplateRows: "1fr 35%" }
+      case 'rates-wide':  return { minHeight: 0, display: "grid", gridTemplateColumns: "75% 25%",  gridTemplateRows: "1fr" }
+      case 'rates-full':  return { minHeight: 0, display: "grid", gridTemplateColumns: "1fr",      gridTemplateRows: "1fr" }
+      case 'ads-full':    return { minHeight: 0, display: "grid", gridTemplateColumns: "1fr",      gridTemplateRows: "1fr" }
+      default:            return { minHeight: 0, display: "grid", gridTemplateColumns: "64% 36%",  gridTemplateRows: "1fr" }
     }
   })()
 
