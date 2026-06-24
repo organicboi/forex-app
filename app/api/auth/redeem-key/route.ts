@@ -97,6 +97,8 @@ export async function POST(request: NextRequest) {
       sell: 0,
       transfer: 0,
       mode: 'manual' as const,
+      updated_by: null as string | null,
+      updated_at: new Date().toISOString(),
     }))
 
     await supabase
